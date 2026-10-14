@@ -1,0 +1,11 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const dist=process.env.FE8_TEST_DIST||path.join(__dirname,'dist'),create=require(path.join(dist,'fe8.js')),rom=fs.readFileSync(path.join(__dirname,'../baserom.gba')),map=fs.readFileSync(path.join(__dirname,'../fireemblem8.map'),'utf8');
+const table=parseInt(map.match(/(0x[0-9a-f]+)\s+gConvoBackgroundData\b/)[1],16)-0x8000000;
+function lz(p){assert.equal(rom[p],16);const n=rom.readUIntLE(p+1,3),out=Buffer.alloc(n);let r=p+4,w=0;while(w<n){const f=rom[r++];for(let bit=7;bit>=0&&w<n;bit--){if(f&(1<<bit)){const v=rom.readUInt16BE(r);r+=2;for(let k=0;k<(v>>12)+3&&w<n;k++){out[w]=out[w-(v&4095)-1];w++;}}else out[w++]=rom[r++];}}return out;}
+(async()=>{const m=await create({wasmBinary:fs.readFileSync(path.join(dist,'fe8.wasm'))});m._fe8_game_reset();m._fe8_map_start(0);const p=m._fe8_map_pixels();let pixels=0;
+ for(const id of [0,2,4,14,16,22,24,28,29,32,38]){const r=table+id*12,gfx=lz(rom.readUInt32LE(r)-0x8000000),tsa=rom.readUInt32LE(r+4)-0x8000000,pal=rom.readUInt32LE(r+8)-0x8000000,w=rom[tsa]+1,h=rom[tsa+1]+1;const native=m._fe8_background_set(id);assert.equal(native,0);m._fe8_background_render(p);
+  // Reference applies the original ARM routine's bottom-to-top row traversal first.
+  const tiles=new Uint16Array(1024);let src=tsa+2;for(let y=h-1;y>=0;y--)for(let x=0;x<w;x++){tiles[y*32+x]=rom.readUInt16LE(src);src+=2;}
+  for(let y=0;y<160;y++)for(let x=0;x<240;x++){const t=tiles[(y>>3)*32+(x>>3)],dx=t&1024?7-(x&7):x&7,dy=t&2048?7-(y&7):y&7,ink=gfx[(t&1023)*32+dy*4+(dx>>1)]>>((dx&1)*4)&15,color=rom.readUInt16LE(pal+(t>>12)*32+ink*2);for(let c=0;c<3;c++){const v=color>>(c*5)&31;assert.equal(m.HEAPU8[p+(y*240+x)*4+c],v<<3|v>>2);}pixels++;}assert.equal(m._fe8_background_info(1),0);
+ }assert.equal(m._fe8_background_set(999),-1);assert.equal(m._fe8_background_info(0),38);assert.equal(m._fe8_background_set(-1),0);assert.equal(m._fe8_background_info(0),-1);m.HEAPU8.fill(123,p,p+153600);m._fe8_background_render(p);assert.ok(m.HEAPU8.slice(p,p+153600).every(v=>v===123));console.log(`OK: 11 fundos originais, ${pixels} pixels contra ROM/ARM TSA, flips/paletas e limites.`);
+})().catch(e=>{console.error(e);process.exitCode=1;});

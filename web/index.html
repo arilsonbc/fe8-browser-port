@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fire Emblem 8 · Port para navegador</title>
+<style>
+body{background:#111827;color:#e5e7eb;font:17px system-ui;max-width:760px;margin:24px auto;padding:20px}
+h1{font-size:27px}button,input{font:inherit;padding:10px 14px;margin:5px;border-radius:7px;border:1px solid #64748b;background:#1e293b;color:#fff}
+button{cursor:pointer}button:disabled{opacity:.5}.save-panel{border-top:1px solid #475569;margin-top:28px;padding-top:12px}.save-panel h2{font-size:20px}.save-slots{font-size:15px}pre{white-space:pre-wrap;background:#1f2937;padding:16px;font-size:14px}
+canvas{display:block;width:100%;image-rendering:pixelated;background:#000}#screen{border:1px solid #64748b}#startStatus{min-height:48px}
+.controls{display:flex;flex-wrap:wrap;gap:4px}details{margin-top:32px;border-top:1px solid #475569;padding-top:16px}summary{cursor:pointer}
+</style></head><body>
+<h1>Fire Emblem · The Sacred Stones</h1>
+<p>Port para navegador, sem emulador. Título, menu, saves, unidades e eventos em desenvolvimento; o jogo completo ainda não está jogável.</p>
+<p id="status">Carregando WebAssembly…</p><main id="gameMount"></main>
+<details><summary>Diagnósticos e recursos originais</summary>
+<label>Semente <input id="seed" type="number" value="0" min="0" max="2147483647"></label>
+<button id="run" disabled>Gerar sequência original</button><pre id="output"></pre>
+<h2>Processos</h2><p id="proc">Aguardando módulo…</p><button id="advance" disabled>Executar uma atualização</button>
+<h2>Controles</h2><pre id="keys">Aguardando módulo…</pre>
+<h2>Peças do logotipo</h2><canvas id="graphics" width="256" height="64"></canvas>
+<h2>Logotipo montado</h2><canvas id="title" width="240" height="160"></canvas>
+</details>
+<script src="event-texts.js"></script><script src="chapter-ui.js"></script><script src="storage.js"></script><script src="storage-ui.js"></script><script src="clock.js"></script><script src="audio.js"></script><script src="fe8.js"></script><script>
+const screenSection=document.createElement('section');
+screenSection.innerHTML='<p>Setas: navegar · Z: confirmar · X: voltar · Enter: Start no título e na dificuldade.</p><canvas id="screen" width="240" height="160" style="width:100%;image-rendering:pixelated"></canvas><p id="startStatus">Preparando o título…</p>';
+document.querySelector('#gameMount').append(screenSection);
+Promise.all([createFE8Module(),createFE8Module()]).then(([m,demo])=>{
+ const screenContext=document.querySelector('#screen').getContext('2d');
+ const drawScreen=()=>{
+  const ptr=m._fe8_game_pixels();
+  screenContext.putImageData(new ImageData(new Uint8ClampedArray(m.HEAPU8.slice(ptr,ptr+240*160*4)),240,160),0,0);
+ };
+ 
+ const titlePointer=m._fe8_title_pixels();
+ const titleRGBA=new Uint8ClampedArray(m.HEAPU8.slice(titlePointer,titlePointer+240*160*4));
+ document.querySelector('#title').getContext('2d').putImageData(new ImageData(titleRGBA,240,160),0,0);
+ const pointer=m._fe8_graphics_pixels();
+ const rgba=new Uint8ClampedArray(m.HEAPU8.slice(pointer,pointer+256*64*4));
+ document.querySelector('#graphics').getContext('2d').putImageData(new ImageData(rgba,256,64),0,0);
+ const result=m._fe8_rng_selftest();
+ if(result!==0)throw Error('Falha no teste: '+result);
+ const procResult=demo._fe8_proc_selftest();
+ if(procResult!==0)throw Error('Falha no teste de processos: '+procResult);
+ demo._fe8_proc_demo_start();
+ m._fe8_input_reset();
+ let localStore;
+ try{localStore=window.localStorage;}catch(error){localStore={getItem(){throw error;},setItem(){throw error;}};}
+ const persistence=new FE8Storage(m,localStore);persistence.initialize();
+ m._fe8_game_reset();
+ const audio=new FE8AudioOutput(m,screenSection);audio.tick();
+ const resetTitle=document.createElement('button');resetTitle.textContent='Reiniciar título';
+ resetTitle.onclick=()=>{held=0;pendingPress=0;clock.reset();m._fe8_game_reset();drawScreen();document.querySelector('#startStatus').textContent='Entrada do título: fade original em execução.';};
+ document.querySelector('#startStatus').after(resetTitle);
+ const mapping={ArrowRight:16,ArrowLeft:32,ArrowUp:64,ArrowDown:128,KeyZ:1,KeyX:2,Enter:8,ShiftLeft:4,KeyQ:512,KeyW:256};
+ let held=0,pendingPress=0;
+ const controls=document.createElement('div');controls.className='controls';
+ for(const [label,bit] of [['←',32],['→',16],['↑',64],['↓',128],['Z · A',1],['X · B',2],['Start',8]]){
+  const control=document.createElement('button');control.textContent=label;control.setAttribute('aria-label',label);
+  control.onclick=()=>{pendingPress|=bit;};controls.append(control);
+ }
+ document.querySelector('#startStatus').after(controls);
+ window.addEventListener('keydown',e=>{if(mapping[e.code] && !['INPUT','TEXTAREA'].includes(e.target.tagName)){e.preventDefault();held|=mapping[e.code];}});
+ window.addEventListener('keyup',e=>{if(mapping[e.code])held&=~mapping[e.code];});
+ window.addEventListener('blur',()=>{held=0;pendingPress=0;clock.reset();});
+ document.addEventListener('visibilitychange',()=>{held=0;pendingPress=0;clock.reset();});
+ const clock=new FE8Clock(()=>{
+   const action=m._fe8_game_tick(held|pendingPress);pendingPress=0;audio.tick();saveUI.tick();chapterUI.tick(action);
+   const messages=[
+    'Entrada do título: fade original em execução.',
+    'Título ativo. Z ou Enter inicia a saída; X é ignorado.',
+    'Saída do título: fade original em execução.',
+    'Menu principal: setas para escolher, Z para confirmar, X para voltar ao título.',
+    'Controlador original solicitou a demonstração automática. Demonstração ainda não integrada.',
+    'Abertura completa ainda não integrada.',
+    'Extras: Sound Room. Z seleciona; X volta ao menu principal.',
+    'Escolha Easy, Normal ou Difficult. Z ou Enter confirma; X cancela.',
+    m._fe8_menu_confirmation()?(m._fe8_save_suspend_slot()>=0&&m._fe8_menu_operation()===16?'Há um save suspenso importado. Iniciar New Game remove a suspensão. ← confirma a ação; → Cancel. Z escolhe.':'Confirmação: ← seleciona a ação, → seleciona Cancel. Z confirma; X fecha.'):'Escolha um slot com as setas. Z seleciona; X volta.',
+    m._fe8_menu_request()===3?'Sound Room ainda não integrada. X volta a Extras.':'Operação não concluída: '+m._fe8_menu_save_error()+'. X volta ao menu.',
+    'Transição entre telas…',
+    m._fe8_event_info(1)>=0?'Sequência pausada em um recurso ainda não integrado. Use o painel de prévia ou Reiniciar título.':m._fe8_event_busy()?'Sequência original em execução; Z avança os diálogos. Use o painel abaixo da tela.':m._fe8_map_active()?'Mapa original do capítulo '+m._fe8_map_info(0)+'. Z seleciona uma unidade; setas escolhem o destino; X cancela a ação ou volta ao título. Attack, End Turn e Seize quando disponível. Prólogo, capítulo 1 e cena de Frelia integrados; fuga da IA e progressão seguinte ainda pendentes.':'Mapa deste save ainda não disponível. X volta ao título.'
+   ];
+   document.querySelector('#startStatus').textContent=messages[action]||'Estado desconhecido: '+action;
+   document.querySelector('#keys').textContent='Pressionados: '+m._fe8_input_held()+' | Novos: '+m._fe8_input_new()+' | Repetição: '+m._fe8_input_repeat();
+ });
+ const inputFrame=t=>{
+  if(!document.hidden){clock.advance(t);drawScreen();}
+  requestAnimationFrame(inputFrame);
+ };
+ const saveUI=attachFE8SaveUI(m,persistence,()=>resetTitle.onclick());
+ const chapterUI=attachFE8ChapterUI(m);
+ drawScreen();requestAnimationFrame(inputFrame);
+ const advance=document.querySelector('#advance');advance.disabled=false;
+ document.querySelector('#proc').textContent='Teste aprovado: espera, bloqueio de pai/filho, encerramento e reutilização.';
+ advance.onclick=()=>document.querySelector('#proc').textContent='Atualizações executadas pelo processo original: '+demo._fe8_proc_demo_frame();
+ document.querySelector('#status').textContent='WebAssembly carregado. Teste interno aprovado.';
+ const button=document.querySelector('#run');button.disabled=false;
+ button.onclick=()=>{
+  const seed=Number(document.querySelector('#seed').value);
+  if(!Number.isInteger(seed)||seed<0||seed>2147483647)return;
+  demo._InitRN(seed);
+  document.querySelector('#output').textContent=Array.from({length:20},()=>demo._NextRN()).join(', ');
+ };
+ button.click();
+}).catch(e=>document.querySelector('#status').textContent='Erro: '+e.message);
+</script></body></html>
+
