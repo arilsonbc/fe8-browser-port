@@ -73,10 +73,11 @@ static void AddChapterJob(int kind){if((gPlaySt.chapterIndex!=0&&gPlaySt.chapter
 void fe8_event_phase(void){AddChapterJob(1);}
 extern struct Unit *GetUnit(int index);
 extern u16 CountRedUnits(void);
+int AreAnyEnemyUnitDead(void);
 extern u16 CountGreenUnits(void);
 void fe8_event_post_action(void){
  if(fe8_battle_info(18)&&fe8_battle_info(9)){for(int side=3;side<=4;side++){struct Unit *u=GetUnit(fe8_battle_info(side));if(!UNIT_IS_VALID(u)||u->curHP)continue;if(UNIT_FACTION(u)==FACTION_RED&&(UNIT_CATTRIBUTES(u)&CA_BOSS))SetFlag(2);if(UNIT_FACTION(u)==FACTION_BLUE&&(UNIT_CATTRIBUTES(u)&CA_LORD))SetFlag(101);}}
- if(gPlaySt.chapterIndex==2){if(CountRedUnits()==0)SetFlag(1);else ClearFlag(1);}
+ if(gPlaySt.chapterIndex==2){if(AreAnyEnemyUnitDead()==0)SetFlag(6);else ClearFlag(6);}
  AddChapterJob(2);
 }
 int fe8_event_busy(void){return running||blocked>=0||textId>=0||pendingItem||rewardValue;}
