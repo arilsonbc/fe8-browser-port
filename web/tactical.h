@@ -5,6 +5,7 @@ struct Unit;
 int fe8_tactical_probe_movement(struct Unit *unit,int x,int y,int limit,int id,u8 *out);
 void fe8_tactical_reset(void);
 void fe8_tactical_render_menu(u8 *rgba);
+void fe8_tactical_render_item_menu(u8 *rgba);
 int fe8_tactical_start(void);
 void fe8_tactical_tick(int keys);
 int fe8_tactical_select(int index);

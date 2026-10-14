@@ -41,7 +41,7 @@ def fn(name):
   p+=1
  return source[m.start():p]
 functions=[]
-for name in ['Event00_NULL','Event01_End','Event02_EvBitAndIdMod','Event03_CheckEvBitOrId','Event05_SetSlot','Event06_SlotOperation','Event07_SlotQueueOperations','Event08_Label','Event09_Goto','Event0A_Call','Event0C_Branch','Event0E_STAL','Event10_ModifyEvBit']:
+for name in ['Event00_NULL','Event01_End','Event02_EvBitAndIdMod','Event03_CheckEvBitOrId','Event05_SetSlot','Event06_SlotOperation','Event07_SlotQueueOperations','Event08_Label','Event09_Goto','Event0A_Call','Event0C_Branch','Event0E_STAL','Event10_ModifyEvBit','Event11_SetIgnoredKeys']:
  f=fn(name)
  if name=='Event01_End':f=f.replace('(u16 *)EventScr_08592114','ResolveScript('+str(symbols['EventScr_08592114'][0])+')')
  if name=='Event09_Goto':
@@ -75,7 +75,7 @@ for m in re.finditer(r'^## MSG_([\dA-F]+)\n(.*?)(?=^## |\Z)',texts,re.M|re.S):
 with (root/'web/generated/event_assets.h').open('a') as out:
  out.write('\nstatic const struct {int id,page;} eventTextPauses[]={'+','.join(pauseRows+['{-1,-1}'])+'};')
  out.write('\nstatic const struct {int id,count;} eventTextCounts[]={'+','.join(pageCounts)+'};')
-print('Events: '+str(len(names))+' original scripts, 13 native original handlers, '+str(len(messages))+' original messages')
+print('Events: '+str(len(names))+' original scripts, 14 native original handlers, '+str(len(messages))+' original messages')
 
 
 allMessages={int(m.group(1),16):re.sub(r'\[[^]]*\]','',m.group(2)).strip().replace('\n',' ') for m in re.finditer(r'^## MSG_([\dA-F]+)\n(.*?)(?=^## |\Z)',texts,re.M|re.S)}

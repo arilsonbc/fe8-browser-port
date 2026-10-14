@@ -28,7 +28,7 @@ DPAD_RIGHT=16, DPAD_LEFT=32, DPAD_UP=64, DPAD_DOWN=128,
 R_BUTTON=256, L_BUTTON=512, DPAD_ANY=240 };
 static u16 gKeyStatusIgnoredSt;
 '''
-text += struct.group() + '\n' + function('_UpdateKeyStatus') + '\n' + function('ResetKeyStatus')
+text += struct.group() + '\n' + function('_UpdateKeyStatus') + '\n' + function('ResetKeyStatus') + '\n' + function('SetKeyStatus_IgnoreMask')
 text += '''
 static struct KeyStatusBuffer state;
 void fe8_input_reset(void) { state = (struct KeyStatusBuffer){0}; ResetKeyStatus(&state); }

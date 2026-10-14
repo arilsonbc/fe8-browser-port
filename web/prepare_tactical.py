@@ -42,6 +42,12 @@ textSource=(root/'texts/texts.txt').read_text()
 for name,ident in [('tacticalAttack',0x67b),('tacticalSeize',0x67a),('tacticalStaff',0x67c),('tacticalItem',0x68d),('tacticalTalk',0x680),('tacticalVisit',0x682),('tacticalWait',0x695),('tacticalCancel',0x24),('tacticalEnd',0x6a0)]:
  message=re.search(r'^## MSG_'+format(ident,'03X')+r'\n(.*?)(?=^## |\Z)',textSource,re.M|re.S).group(1)
  text=re.sub(r'\[[^]]*\]','',message).strip();parts.append('static const char '+name+'[]='+json.dumps(text)+';')
+# Item names retain the original IDs decoded by prepare_events.py.
+itemNames=json.loads(re.search(r'globalThis.FE8ItemNames=(.*);', (root/'web/event-texts.js').read_text()).group(1))
+parts.append('static const char *tacticalItemNames[256]={'+','.join('['+key+']='+json.dumps(value['name']) for key,value in itemNames.items())+'};')
+for name,ident in [('tacticalInventoryFull',0x866),('tacticalInventorySupply',0x867)]:
+ message=re.search(r'^## MSG_'+format(ident,'03X')+r'\n(.*?)(?=^## |\Z)',textSource,re.M|re.S).group(1)
+ text=re.sub(r'\[[^]]*\]','',message).strip();parts.append('static const char '+name+'[]='+json.dumps(text)+';')
 (root/'web/generated/tactical_assets.h').write_text('\n'.join(parts))
 (root/'web/generated/tactical_routines.h').write_text('\n'.join(f[:f.index('{')].strip()+';' for f in functions)+'\n'+'\n'.join(functions))
 (root/'web/generated/tactical_assets.json').write_text(json.dumps({'routines':manifest,'flood':'Original C test step, ARM core neighbor order; bounds and pool guards added','path':'Original randomized tie choice; uninitialized edge OR replaced with assignment'},indent=2))

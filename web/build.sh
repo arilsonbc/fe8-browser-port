@@ -64,4 +64,7 @@ node web/test_death.cjs
 node web/test_audio.cjs
 node web/test_progress.cjs
 node web/test_background.cjs
+node web/test_chapter2.cjs
+node web/test_heal.cjs
+node web/test_drop.cjs
 echo 'WebAssembly compilado e testes aprovados. Saída: web/dist'

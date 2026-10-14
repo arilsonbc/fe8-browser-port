@@ -1,3 +1,4 @@
+extern void SetKeyStatus_IgnoreMask(int mask);
 #include "events.h"
 #include "audio.h"
 #include "background.h"
@@ -39,7 +40,8 @@ int fe8_progress_info(int f){return f==0?progressCount:f==1?progressFrom:f==2?pr
 static struct {int kind,cursor,actor;} chapterJobs[4];
 static int chapterJobCount;
 static int audioWait,pausedText=-1,pausedPage;
-static int pendingItem,pendingUnit,pendingChoice,itemResolved;
+static int pendingItem,pendingUnit,pendingChoice,itemResolved,pendingOrigin;
+static int rewardUnit,rewardValue,rewardGold,lastRewardItem,lastRewardUnit,rewardSerial;
 static int running,blocked=-1,textId=-1,textPage,textCount,executed,requests=-1,preview;
 static const u16 *ResolveScript(u32 address){for(int i=0;i<sizeof(eventScripts)/sizeof(*eventScripts);i++)if(eventScripts[i].address==address)return eventScripts[i].data;return NULL;}
 static int ScriptRemaining(const u16 *pointer){uintptr_t p=(uintptr_t)pointer;for(int i=0;i<sizeof(eventScripts)/sizeof(*eventScripts);i++){uintptr_t base=(uintptr_t)eventScripts[i].data;if(p>=base&&p<base+eventScripts[i].length*2&&!(p&1))return (base+eventScripts[i].length*2-p)/2;}return 0;}
@@ -60,7 +62,7 @@ static void ResetMenuOverrides(void){memset(menuOverrides,0,sizeof(menuOverrides
 static void AddMenuOverride(int id,int kind,int (*callback)(void)){if(id>=0&&id<256&&kind>=0&&kind<2)menuOverrides[id][kind]=callback==MenuAlwaysNotShown?1:callback==MenuAlwaysDisabled?2:3;}
 #include "generated/event_guide.h"
 
-void fe8_event_reset(void){pendingItem=pendingUnit=pendingChoice=itemResolved=0;fe8_background_set(-1);pausedText=-1;pausedPage=0;audioWait=0;eventActor=NULL;fe8_death_reset();chapterJobCount=eventTriggerId=eventTriggerAddress=eventCallSerial=0;fe8_tactical_reset();ResetMenuOverrides();fe8_battle_reset();fe8_dialogue_reset();if(fadeAnchor){Proc_End(fadeAnchor);fadeAnchor=NULL;}memset(&gLCDControlBuffer,0,sizeof(gLCDControlBuffer));memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));memset(gEventSlots,0,sizeof(gEventSlots));memset(eventFlags,0,sizeof(eventFlags));running=preview=executed=0;blocked=textId=requests=-1;textPage=textCount=0;gKeyStatusPtr=fe8_input_status();}
+void fe8_event_reset(void){SetKeyStatus_IgnoreMask(0);pendingItem=pendingUnit=pendingChoice=itemResolved=pendingOrigin=rewardUnit=rewardValue=rewardGold=lastRewardItem=lastRewardUnit=rewardSerial=0;fe8_background_set(-1);pausedText=-1;pausedPage=0;audioWait=0;eventActor=NULL;fe8_death_reset();chapterJobCount=eventTriggerId=eventTriggerAddress=eventCallSerial=0;fe8_tactical_reset();ResetMenuOverrides();fe8_battle_reset();fe8_dialogue_reset();if(fadeAnchor){Proc_End(fadeAnchor);fadeAnchor=NULL;}memset(&gLCDControlBuffer,0,sizeof(gLCDControlBuffer));memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));memset(gEventSlots,0,sizeof(gEventSlots));memset(eventFlags,0,sizeof(eventFlags));running=preview=executed=0;blocked=textId=requests=-1;textPage=textCount=0;gKeyStatusPtr=fe8_input_status();}
 int fe8_event_start(u32 address){fe8_event_reset();const u16 *p=ResolveScript(address);if(!p)return -1;engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=gPlaySt.chapterIndex;running=1;return 0;}
 int fe8_event_call(u32 address,int trigger){
  const u16 *p=ResolveScript(address);if(!p||running||blocked>=0||textId>=0||fe8_battle_busy())return -1;
@@ -77,7 +79,7 @@ void fe8_event_post_action(void){
  if(gPlaySt.chapterIndex==2){if(CountRedUnits()==0)SetFlag(1);else ClearFlag(1);}
  AddChapterJob(2);
 }
-int fe8_event_busy(void){return running||blocked>=0||textId>=0||pendingItem;}
+int fe8_event_busy(void){return running||blocked>=0||textId>=0||pendingItem||rewardValue;}
 static int ShowText(int id){textCount=0;for(int i=0;i<sizeof(eventTextCounts)/sizeof(*eventTextCounts);i++)if(eventTextCounts[i].id==id)textCount=eventTextCounts[i].count;if(!textCount)return EVC_ERROR;textId=id;textPage=0;return EVC_ADVANCE_YIELD;}
 void fe8_event_advance(void){if(textId>=0){textPage++;for(int i=0;i<ARRAY_COUNT(eventTextPauses);i++)if(eventTextPauses[i].id==textId&&eventTextPauses[i].page==textPage){pausedText=textId;pausedPage=textPage;textId=-1;return;}if(textPage>=textCount){textId=-1;textPage=textCount=0;pausedText=-1;}}}
 void fe8_event_confirm(void){if(fe8_dialogue_confirm())fe8_event_advance();}
@@ -145,7 +147,7 @@ static int Command(struct EventEngineProc *p){
  case 12:if(s[2]>=14||s[3]>=14)return EVC_ERROR;return Event0C_Branch(p);
  case 13:if((EVT_CMD_ARG32_BE(s)&~1u)==BmGuideTextSetAllGreen_ADDRESS){BmGuideTextSetAllGreen();return EVC_ADVANCE_CONTINUE;}return EVC_ERROR;
  case 14:return Event0E_STAL(p);
- case 16:return Event10_ModifyEvBit(p);
+ case 16:return Event10_ModifyEvBit(p);case 17:return Event11_SetIgnoredKeys(p);
  case 18:requests=code;return Event12_StartBGM(p);case 19:requests=code;return Event13_BgmFadeIn(p);case 20:requests=code;return Event14_BgmOverideRestore(p);case 21:requests=code;return Event15_BgmVolume(p);case 22:requests=code;return Event16_(p);
  case 23:return Event17_Fade(p);
  case 25: // Original CHECK family needed by prologue and tutorial guards.
@@ -173,7 +175,7 @@ static int Command(struct EventEngineProc *p){
   if(sub>=2&&sub<=4){int old=(u8)u->index,next=fe8_unit_change_faction(old,(sub-2)*64);if(next<0)return EVC_ERROR;if(eventActor==u)fe8_event_actor(next);}else if(sub==0){u->state|=US_HIDDEN|US_BIT16|US_BIT26;}else if(sub==1){u->state&=~(US_HIDDEN|US_BIT16|US_BIT26);}else if(sub==13){u->state|=US_HIDDEN;}else if(sub==5){u->curHP=gEventSlots[1]<u->maxHP?gEventSlots[1]:u->maxHP;if(!u->curHP)u->state|=US_DEAD;}
   else if(sub==6)u->state|=US_UNSELECTABLE;else if(sub==7)u->state|=US_HAS_MOVED;else if(sub==8){if(gEventSlots[1]==1)u->state&=~US_NOT_DEPLOYED;else if(!gEventSlots[1])u->state|=US_NOT_DEPLOYED;else if((s32)gEventSlots[1]==-1){if(u->state&US_BIT21)u->state|=US_NOT_DEPLOYED;else u->state&=~US_NOT_DEPLOYED;}else return EVC_ERROR;}else if(sub==15||sub==14)fe8_unit_remove_index((u8)u->index);
   else return EVC_ERROR;return EVC_ADVANCE_CONTINUE;}
- case 55:{struct Unit *u=EventUnit(a);if(!u)return EVC_ERROR;if(sub==1){if(UNIT_FACTION(u)==FACTION_BLUE)SetPartyGoldAmount(GetPartyGoldAmount()+gEventSlots[3]);return EVC_ADVANCE_YIELD;}if(sub!=0)return EVC_ERROR;if(itemResolved){itemResolved=0;return EVC_ADVANCE_YIELD;}if(fe8_unit_give(u->pCharacterData->number,gEventSlots[3])>0)return EVC_ADVANCE_YIELD;pendingItem=fe8_unit_make_item(gEventSlots[3]);if(!pendingItem)return EVC_ERROR;pendingUnit=(u8)u->index;pendingChoice=5;return EVC_STOP_YIELD;} // Native inventory-full choice replaces original popup/ConvoyMenu Procs; no item is silently discarded.
+ case 55:{struct Unit *u=EventUnit(a);if(!u)return EVC_ERROR;if(sub==1){if(UNIT_FACTION(u)==FACTION_BLUE)SetPartyGoldAmount(GetPartyGoldAmount()+gEventSlots[3]);return EVC_ADVANCE_YIELD;}if(sub!=0)return EVC_ERROR;if(itemResolved){itemResolved=0;return EVC_ADVANCE_YIELD;}if(fe8_unit_give(u->pCharacterData->number,gEventSlots[3])>0)return EVC_ADVANCE_YIELD;pendingItem=fe8_unit_make_item(gEventSlots[3]);if(!pendingItem)return EVC_ERROR;pendingUnit=(u8)u->index;pendingChoice=5;pendingOrigin=1;return EVC_STOP_YIELD;} // Native inventory-full choice replaces original popup/ConvoyMenu Procs; no item is silently discarded.
  case 57:{if(sub!=0)return EVC_ERROR;ChangeAiForCharacter(a<0?gEventSlots[2]:a,gEventSlots[1]&255,gEventSlots[1]>>8&255,gEventSlots[1]>>16&255);return EVC_ADVANCE_CONTINUE;}
  case 58:if(sub==0&&s[2])fe8_audio_se(s[2]);return ShowText(s[1]); // Adapted notification/brown-box presentation.
  case 61:if(sub>2)return EVC_ERROR;return Event3D_MenuOverride(p);
@@ -182,11 +184,13 @@ static int Command(struct EventEngineProc *p){
  default:return EVC_ERROR;
  }
 }
-int fe8_event_item_info(int field){return field==0?pendingItem:field==1?pendingUnit:field==2?pendingChoice:field==3?(gPlaySt.chapterIndex==2&&fe8_convoy_count()<100):field==4?fe8_convoy_count():-1;}
-int fe8_event_item_choose(int slot){if(!pendingItem||slot<0||slot>5)return -1;struct Unit *u=GetUnit(pendingUnit);if(!UNIT_IS_VALID(u))return -2;int item=slot==5?pendingItem:u->items[slot];if(!item)return -3;if(fe8_event_item_info(3)&&fe8_convoy_add(item)<0)return -4;if(slot<5)u->items[slot]=pendingItem;pendingItem=0;itemResolved=1;fe8_audio_se(0x6a);return 0;}
+int fe8_event_item_info(int field){return field==0?pendingItem:field==1?pendingUnit:field==2?pendingChoice:field==3?(gPlaySt.chapterIndex==2&&fe8_convoy_count()<100):field==4?fe8_convoy_count():field==5?lastRewardItem:field==6?lastRewardUnit:field==7?rewardSerial:-1;}
+int fe8_event_item_choose(int slot){if(!pendingItem||slot<0||slot>5)return -1;struct Unit *u=GetUnit(pendingUnit);if(!UNIT_IS_VALID(u))return -2;int item=slot==5?pendingItem:u->items[slot];if(!item)return -3;if(fe8_event_item_info(3)&&fe8_convoy_add(item)<0)return -4;if(slot<5)u->items[slot]=pendingItem;pendingItem=0;itemResolved=pendingOrigin;pendingOrigin=0;fe8_audio_se(0x6a);return 0;}
+void fe8_event_reward(int unit,int item,int gold){if(rewardValue||pendingItem){blocked=263;return;}rewardUnit=unit;rewardValue=item;rewardGold=gold;}
 void fe8_event_tick(int keys){
  if(pendingItem){if(keys&192)pendingChoice=(pendingChoice+((keys&128)?1:5))%6;if(keys&1)fe8_event_item_choose(pendingChoice);return;}
  if(textId>=0){if(keys&(1|2|8))fe8_event_confirm();return;}
+ if(rewardValue&&!fe8_battle_busy()&&blocked<0){struct Unit *u=GetUnit(rewardUnit);if(!UNIT_IS_VALID(u)){blocked=263;return;}lastRewardUnit=rewardUnit;lastRewardItem=rewardGold?-rewardValue:fe8_unit_make_item(rewardValue);rewardSerial++;fe8_audio_se(0x5a);if(rewardGold)SetPartyGoldAmount(GetPartyGoldAmount()+rewardValue);else if(fe8_unit_give(u->pCharacterData->number,rewardValue)<=0){pendingItem=lastRewardItem;pendingUnit=rewardUnit;pendingChoice=5;pendingOrigin=0;}rewardValue=0;return;}
  if(!running||blocked>=0||EventFadePending()||fe8_battle_busy())return;
  if(audioWait>0){audioWait--;return;}
  for(int budget=0;budget<128;budget++){
@@ -201,7 +205,7 @@ void fe8_event_tick(int keys){
  blocked=257; // Bound work per update; malformed loops cannot hang the browser.
 }
 static void DispatchChapterJobs(void){
- if(running||blocked>=0||textId>=0||fe8_battle_busy())return;
+ if(running||blocked>=0||textId>=0||pendingItem||rewardValue||fe8_battle_busy())return;
  while(chapterJobCount){
   int chapter=gPlaySt.chapterIndex;int kind=chapterJobs[0].kind;
   const u32 *list=chapter==2?(kind==1?EventListScr_Ch2_Turn:EventListScr_Ch2_Misc):chapter==1?(kind==1?EventListScr_Ch1_Turn:EventListScr_Ch1_Misc):(kind==1?EventListScr_Prologue_Turn:EventListScr_Prologue_Misc);

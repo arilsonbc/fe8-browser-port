@@ -12,6 +12,7 @@
 #include "rng.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #define gPlaySt (*fe8_save_loaded_playst())
 #include "generated/tactical_assets.h"
 extern struct Unit *GetUnit(int index);
@@ -187,4 +188,12 @@ int fe8_tactical_npc_move(int index,int x,int y){
  u8 path[MOVE_CMD_MAX_COUNT];GenerateBestMovementScript(x,y,path);int px=u->xPos,py=u->yPos,n=0;u32 queue[128];
  for(;n<MOVE_CMD_MAX_COUNT-1&&path[n]!=MOVE_CMD_HALT;n++){switch(path[n]){case 0:px--;break;case 1:px++;break;case 2:py++;break;case 3:py--;break;default:floodError=4;break;}queue[n*2]=px|(py<<6);queue[n*2+1]=0;}
  gActiveUnit=old;gActiveUnitId=oldId;gActiveUnitMoveOrigin=origin;if(floodError||px!=x||py!=y)return -4;return n?fe8_unit_move_queue_index(index,queue,n*2):0;
+}
+
+// Native choice presentation; original frame/font/names and English message IDs retained.
+void fe8_tactical_render_item_menu(u8 *rgba){
+ int incoming=fe8_event_item_info(0);if(!incoming)return;int index=fe8_event_item_info(1),choice=fe8_event_item_info(2),supply=fe8_event_item_info(3);struct Unit *u=GetUnit(index);if(!UNIT_IS_VALID(u))return;u16 map[1024]={0};DrawUiFrame(map,3,1,24,18,0,0);
+ for(int y=8;y<152;y++)for(int x=24;x<216;x++){int ref=map[(y/8)*32+x/8],dx=ref&1024?7-(x&7):x&7,dy=ref&2048?7-(y&7):y&7,pos=(ref&1023)*32+dy*4+dx/2;if(pos>=sizeof(gUiFrameImage))continue;int ink=gUiFrameImage[pos]>>((dx&1)*4)&15;if(ink)MenuPixel(rgba,x,y,gUiFramePaletteA[ink]);}
+ const char *message=supply?tacticalInventorySupply:tacticalInventoryFull;char title[96];snprintf(title,sizeof(title),"%s",message);char *next=strchr(title,'.');if(next){*next=0;next++;while(*next==' ')next++;}MenuText(rgba,title,36,14,0);if(next)MenuText(rgba,next,36,30,0);
+ for(int row=0;row<6;row++){int item=row==5?incoming:u->items[row];const char *name=tacticalItemNames[item&255];char uses[8];snprintf(uses,sizeof(uses),"%d",item>>8);if(row==choice)MenuText(rgba,">",30,50+row*16,1);MenuText(rgba,name?name:"",42,50+row*16,row==choice);MenuText(rgba,uses,186,50+row*16,row==choice);}
 }
