@@ -62,11 +62,13 @@ static void ResetMenuOverrides(void){memset(menuOverrides,0,sizeof(menuOverrides
 static void AddMenuOverride(int id,int kind,int (*callback)(void)){if(id>=0&&id<256&&kind>=0&&kind<2)menuOverrides[id][kind]=callback==MenuAlwaysNotShown?1:callback==MenuAlwaysDisabled?2:3;}
 #include "generated/event_guide.h"
 
+#include "generated/progress_icons.h"
+void fe8_event_show_icons(void){UnsetEventId_0x84(NULL);}
 void fe8_event_reset(void){SetKeyStatus_IgnoreMask(0);pendingItem=pendingUnit=pendingChoice=itemResolved=pendingOrigin=rewardUnit=rewardValue=rewardGold=lastRewardItem=lastRewardUnit=rewardSerial=0;fe8_background_set(-1);pausedText=-1;pausedPage=0;audioWait=0;eventActor=NULL;fe8_death_reset();chapterJobCount=eventTriggerId=eventTriggerAddress=eventCallSerial=0;fe8_tactical_reset();ResetMenuOverrides();fe8_battle_reset();fe8_dialogue_reset();if(fadeAnchor){Proc_End(fadeAnchor);fadeAnchor=NULL;}memset(&gLCDControlBuffer,0,sizeof(gLCDControlBuffer));memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));memset(gEventSlots,0,sizeof(gEventSlots));memset(eventFlags,0,sizeof(eventFlags));running=preview=executed=0;blocked=textId=requests=-1;textPage=textCount=0;gKeyStatusPtr=fe8_input_status();}
 int fe8_event_start(u32 address){fe8_event_reset();const u16 *p=ResolveScript(address);if(!p)return -1;engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=gPlaySt.chapterIndex;running=1;return 0;}
 int fe8_event_call(u32 address,int trigger){
  const u16 *p=ResolveScript(address);if(!p||running||blocked>=0||textId>=0||fe8_battle_busy())return -1;
- memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=gPlaySt.chapterIndex;eventTriggerId=trigger;eventTriggerAddress=address;eventCallSerial++;SetFlag(trigger);running=1;return 0;
+ memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=gPlaySt.chapterIndex;eventTriggerId=trigger;eventTriggerAddress=address;eventCallSerial++;SetFlag(trigger);if(trigger==3)SetFlag(132);running=1;return 0;
 }
 int fe8_event_flag(int id){return CheckFlag(id);}
 static void AddChapterJob(int kind){if((gPlaySt.chapterIndex!=0&&gPlaySt.chapterIndex!=1&&gPlaySt.chapterIndex!=2)||preview)return;if(chapterJobCount>=4){blocked=258;return;}chapterJobs[chapterJobCount].kind=kind;chapterJobs[chapterJobCount].actor=kind==2&&eventActor?(u8)eventActor->index:0;chapterJobs[chapterJobCount++].cursor=0;}

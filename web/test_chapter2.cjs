@@ -3,7 +3,7 @@ const dist=process.env.FE8_TEST_DIST||path.join(__dirname,'dist'),create=require
 (async()=>{
  const m=await create({wasmBinary:fs.readFileSync(path.join(dist,'fe8.wasm'))});m._fe8_game_reset();m._fe8_save_reset_empty();m._fe8_save_create(0,1);m._fe8_save_load(0);m.HEAPU8[m._fe8_save_loaded_playst()+14]=2;m._fe8_chapter_start();const originalSave=m.HEAPU8.slice(m._fe8_save_buffer(),m._fe8_save_buffer()+32768),seen=new Set();
  function tick(){m._fe8_event_test_tick(0);const id=m._fe8_event_info(2);if(id>=0){seen.add(id);m._fe8_event_advance();}while(m._fe8_audio_count())m._fe8_audio_pop();assert.equal(m._fe8_event_info(1),-1);assert.equal(m._fe8_ai_info(3),0);}
- function drain(){let n=0;while(m._fe8_event_busy()||m._fe8_event_info(12)||m._fe8_tactical_info(0)===7){assert.ok(++n<20000);tick();}}
+ function drain(){let n=0;while(m._fe8_event_busy()||m._fe8_event_info(12)||m._fe8_tactical_info(0)===7||m._fe8_tactical_info(0)===16){assert.ok(++n<20000);if(m._fe8_tactical_info(0)===16&&!m._fe8_event_busy())m._fe8_tactical_cancel();tick();}}
  function unit(pid,faction){return Array.from({length:255},(_,i)=>i+1).find(i=>m._fe8_unit_info(i,0)===pid&&(faction===undefined||m._fe8_unit_info(i,2)===faction));}
  function move(i,x,y){assert.equal(m._fe8_unit_move_index(i,x,y),0);for(let n=0;n<100;n++)m._fe8_units_tick();}
  function action(i){assert.equal(m._fe8_tactical_select(i),0);assert.equal(m._fe8_tactical_move(m._fe8_unit_info(i,3),m._fe8_unit_info(i,4)),0);for(let n=0;n<100&&m._fe8_tactical_info(0)!==3;n++)tick();assert.equal(m._fe8_tactical_info(0),3);}

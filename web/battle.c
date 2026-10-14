@@ -2,6 +2,7 @@
 #include "support.h"
 #include "death.h"
 #include "events.h"
+#include "tactical.h"
 #include "proc.h"
 #include "generated/battle_types.h"
 #include "units.h"
@@ -147,7 +148,7 @@ void fe8_battle_tick(void){
  timer++;
  if(timer==24&&roundIndex<roundCount){struct BattleHit *h=gBattleHitArray+roundIndex;if(!(h->attributes&BATTLE_HIT_ATTR_MISS)){int *hp=(h->attributes&BATTLE_HIT_ATTR_DEVIL)?((h->info&BATTLE_HIT_INFO_RETALIATION)?&displayTargetHP:&displayActorHP):((h->info&BATTLE_HIT_INFO_RETALIATION)?&displayActorHP:&displayTargetHP);*hp-=h->hpChange;if(*hp<0)*hp=0;}}
  if(timer>=60){timer=0;roundIndex++;}
- if(roundIndex>=roundCount){struct Unit *a=GetUnit(actorIndex),*b=GetUnit(targetIndex);if(normalBattle){CommitNormal(a,&gBattleActor);CommitNormal(b,&gBattleTarget);}else{a->curHP=gBattleActor.unit.curHP;b->curHP=gBattleTarget.unit.curHP;a->state&=~US_UNSELECTABLE;b->state&=~US_UNSELECTABLE;}if(!a->curHP)a->state|=US_HIDDEN|US_DEAD;if(!b->curHP)b->state|=US_HIDDEN|US_DEAD;active=0;completed++;if(normalBattle)fe8_death_after_battle(actorIndex,targetIndex);if(normalBattle==1){struct CombatActionProc proc={0};BATTLE_HandleItemDrop(&proc);}}
+ if(roundIndex>=roundCount){struct Unit *a=GetUnit(actorIndex),*b=GetUnit(targetIndex);if(normalBattle){CommitNormal(a,&gBattleActor);CommitNormal(b,&gBattleTarget);}else{a->curHP=gBattleActor.unit.curHP;b->curHP=gBattleTarget.unit.curHP;a->state&=~US_UNSELECTABLE;b->state&=~US_UNSELECTABLE;}if(normalBattle&&fe8_tactical_rescue_death(actorIndex,targetIndex)<0)error=-12;if(!a->curHP)a->state|=US_HIDDEN|US_DEAD;if(!b->curHP)b->state|=US_HIDDEN|US_DEAD;active=0;completed++;if(normalBattle)fe8_death_after_battle(actorIndex,targetIndex);if(normalBattle==1){struct CombatActionProc proc={0};BATTLE_HandleItemDrop(&proc);}}
 }
 int fe8_battle_busy(void){return active;}
 extern int GetUnitItemHealAmount(struct Unit *u,int item);

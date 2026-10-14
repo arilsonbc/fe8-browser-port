@@ -4,7 +4,7 @@ Port em desenvolvimento em C/WebAssembly, sem emulador. Esta pasta contém o có
 
 ## Estado
 
-Título, menu, controles, mapas, combate físico, fases, diálogos, retratos e áudio nativo estão integrados no percurso já validado. O capítulo 2 executa abertura, recrutamento, visitas, staves, inventário cheio, drops, reforços e a cena final original até o pedido de capítulo 3. Trinta suítes passaram no WASM normal e com AddressSanitizer; mapa-múndi, Trade/Rescue e transição ao capítulo 3 continuam pendentes. Consulte `web/STATUS.md` para adaptações e limitações. Ainda não é o jogo completo; progresso da campanha permanece em RAM, sem gravação completa de progresso/suspensão. Tradução BR futura ainda não integrada.
+Título, menu, controles, mapas, combate físico, fases, diálogos, retratos e áudio nativo estão integrados no percurso já validado. O capítulo 2 executa abertura, recrutamento, visitas, staves, inventário cheio, drops, reforços e a cena final original até o pedido de capítulo 3. Trade, Rescue/Drop, Take/Give e Canto usam regras e rotinas originais com apresentação adaptada. Trinta e oito suítes passaram no WASM normal e com AddressSanitizer; mapa-múndi e transição ao capítulo 3 continuam pendentes. Consulte `web/STATUS.md` para adaptações e limitações. Ainda não é o jogo completo; progresso da campanha permanece em RAM, sem gravação completa de progresso/suspensão. Tradução BR futura ainda não integrada.
 
 ## Compilar localmente
 

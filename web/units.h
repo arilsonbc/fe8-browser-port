@@ -18,6 +18,7 @@ struct Unit *fe8_unit_by_pid(int pid);
 int fe8_unit_make_item(int item);
 int fe8_unit_give(int pid,int item);
 int fe8_unit_move_queue(int pid,const u32 *queue,int length);
+void fe8_unit_sync_position(int index);
 void fe8_unit_remove(int pid);
 void fe8_unit_remove_index(int index);
 int fe8_unit_move_index(int index,int x,int y);

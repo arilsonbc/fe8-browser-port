@@ -108,6 +108,7 @@ u8 *fe8_map_pixels(void){
  fe8_background_render(pixels);
  fe8_dialogue_render(pixels);
  fe8_tactical_render_item_menu(pixels);
+ fe8_tactical_render_trade(pixels);
  int level=fe8_event_fade_level(),mode=fe8_event_fade_mode();
  if(level>0)for(int i=0;i<240*160;i++)for(int c=0;c<3;c++){int value=pixels[i*4+c]>>3;if(mode==2)value+=((31-value)*level)>>4;else value=(value*(16-level))>>4;pixels[i*4+c]=(value<<3)|(value>>2);}
  if(!fe8_display_enabled())for(int i=0;i<240*160;i++)pixels[i*4]=pixels[i*4+1]=pixels[i*4+2]=0;

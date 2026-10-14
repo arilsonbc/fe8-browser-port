@@ -26,3 +26,5 @@ print('Progress: original chapter cleanup, transition/check handlers and difficu
 (root/'web/generated/progress_faction.h').write_text(function('src/bmunit.c','UnitChangeFaction'))
 (root/'web/generated/progress_visit.h').write_text(function('src/bmmenu.c','VisitCommandUsability'))
 (root/'web/generated/progress_loca.h').write_text(function('src/eventinfo.c','EvCheck05_LOCA')+'\n'+function('src/eventinfo.c','EvCheck03_CHAR'))
+
+(root/'web/generated/progress_icons.h').write_text(function('src/eventcall.c','UnsetEventId_0x84'))

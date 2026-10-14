@@ -6,6 +6,7 @@ for line in subprocess.check_output(['arm-none-eabi-nm','-S','fireemblem8.elf'],
  p=line.split()
  if len(p)==4:symbols[p[3]]=(int(p[0],16),int(p[1],16))
  elif len(p)==3 and p[2]=='gPal_MapSprite':symbols[p[2]]=(int(p[0],16),128)
+ elif len(p)==3 and p[2]=='gGfx_MiscUiGraphics':symbols[p[2]]=(int(p[0],16),0)
 def raw(name):a,n=symbols[name];return rom[a-0x8000000:a-0x8000000+n]
 def lz(pointer):
  p=pointer-0x8000000;assert rom[p]==16;size=int.from_bytes(rom[p+1:p+4],'little');p+=4;out=bytearray()
@@ -83,6 +84,8 @@ for i in range(0,len(sprites),8):
  spriteEntries.append('{'+str(size)+','+seen[ptr]+','+str(spriteBytes[ptr])+'}')
 parts.append('static const struct {int size;const u8 *data;int bytes;} standingSprites[]={'+','.join(spriteEntries)+'};')
 pal=raw('gPal_MapSprite');parts.append('static const u16 unitSpritePalettes[]={'+','.join(str(int.from_bytes(pal[i:i+2],'little')) for i in range(0,len(pal),2))+'};')
+# Original LoadObjUIGfx copies 18 tiles per row; OAM rescue indicator uses tile 3.
+ui=lz(symbols['gGfx_MiscUiGraphics'][0]);parts.append('static const u8 rescueIconTile[]={'+','.join(map(str,ui[3*32:4*32]))+'};')
 (root/'web/generated/unit_assets.h').write_text('\n'.join(parts));(root/'web/generated/unit_assets.json').write_text(json.dumps(manifest,indent=2))
 functions=[fn('src/bmunit.c',n) for n in ['ClearUnit','CopyUnit','GetFreeUnit','InitUnits','UnitAddItem','UnitClearInventory','UnitInitFromDefinition','UnitLoadStatsFromChracter','UnitCheckStatCaps','GetUnitFromCharId','SetUnitHp','UnitLoadSupports']]
 functions.append(fn('src/muctrl.c','GenUnitDefinitionFinalPosition'))

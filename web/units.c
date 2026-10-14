@@ -1,9 +1,13 @@
 #include "units.h"
 #include "support.h"
+#include "events.h"
 #include "tactical.h"
 #include "save.h"
 #include "rng.h"
 #include "generated/progress_chapters.h"
+extern int GetUnitAid(struct Unit *u);
+extern int GetUnitSkill(struct Unit *u);
+extern int GetUnitSpeed(struct Unit *u);
 extern void SetUnitStatus(struct Unit *u,int status);
 #define UNIT_STATUS_NONE 0
 #define UNIT_IS_PHANTOM(u) ((u)->pClassData->number==CLASS_PHANTOM)
@@ -82,7 +86,7 @@ int fe8_unit_change_faction(int index,int faction){
  struct Unit *dest=GetFreeUnit(faction);if(!dest)return -3;int next=(u8)dest->index;struct Motion motion=motions[index];UnitChangeFaction(u,faction);memset(motions+index,0,sizeof(*motions));motions[next]=motion;return next;
 }
 int fe8_units_count(void){int count=0;for(int i=1;i<256;i++)if(UNIT_IS_VALID(units+i))count++;return count;}
-int fe8_unit_info(int index,int field){if(index<1||index>255)return -1;struct Unit *u=units+index;if(!UNIT_IS_VALID(u))return -1;switch(field){case 0:return u->pCharacterData->number;case 1:return u->pClassData->number;case 2:return (u8)u->index&192;case 3:return u->xPos;case 4:return u->yPos;case 5:return u->maxHP;case 6:return u->curHP;case 7:return u->pow;case 8:return u->skl;case 9:return u->spd;case 10:return u->def;case 11:return u->res;case 12:return u->lck;case 13:return u->level;case 14:return u->exp;case 15:return u->state;case 16:return u->pCharacterData->nameTextId;case 17:return u->pClassData->baseMov+u->movBonus;case 18:return motions[index].px;case 19:return motions[index].py;case 20:return u->pClassData->SMSId;case 21:return u->conBonus;case 22:return u->movBonus;case 23:return u->supportBits;case 24:return u->ai1;case 25:return u->ai2;case 26:return u->ai_config;case 27:return UNIT_LEADER_CHARACTER(u);case 28:return u->ai_a_pc;case 29:return u->ai_b_pc;default:if(field>=30&&field<35)return u->items[field-30];if(field>=40&&field<48)return u->ranks[field-40];if(field>=50&&field<57)return u->supports[field-50];return -1;}}
+int fe8_unit_info(int index,int field){if(index<1||index>255)return -1;struct Unit *u=units+index;if(!UNIT_IS_VALID(u))return -1;switch(field){case 0:return u->pCharacterData->number;case 1:return u->pClassData->number;case 2:return (u8)u->index&192;case 3:return u->xPos;case 4:return u->yPos;case 5:return u->maxHP;case 6:return u->curHP;case 7:return u->pow;case 8:return u->skl;case 9:return u->spd;case 10:return u->def;case 11:return u->res;case 12:return u->lck;case 13:return u->level;case 14:return u->exp;case 15:return u->state;case 16:return u->pCharacterData->nameTextId;case 17:return u->pClassData->baseMov+u->movBonus;case 18:return motions[index].px;case 19:return motions[index].py;case 20:return u->pClassData->SMSId;case 21:return u->conBonus;case 22:return u->movBonus;case 23:return u->supportBits;case 24:return u->ai1;case 25:return u->ai2;case 26:return u->ai_config;case 27:return UNIT_LEADER_CHARACTER(u);case 61:return GetUnitSkill(u);case 62:return GetUnitSpeed(u);case 60:return GetUnitAid(u);case 58:return u->rescue;case 59:return UNIT_CON(u);case 28:return u->ai_a_pc;case 29:return u->ai_b_pc;default:if(field>=30&&field<35)return u->items[field-30];if(field>=40&&field<48)return u->ranks[field-40];if(field>=50&&field<57)return u->supports[field-50];return -1;}}
 void fe8_units_render(u8 *rgba,int cameraX,int cameraY,int clock){
  // Source standing sheet phase: 0..31 frame0, 32..35 frame1, 36..67 frame2, 68..71 frame1.
  int phase=clock%72,frame=phase>=68?1:phase>=36?2:phase>=32?1:0;
@@ -99,6 +103,10 @@ void fe8_units_render(u8 *rgba,int cameraX,int cameraY,int clock){
    int color=gPaletteBuffer[448+bank*16+index];u8 *p=rgba+(dy*240+dx)*4;for(int c=0;c<3;c++){int value=(color>>(c*5))&31;p[c]=(value<<3)|(value>>2);}p[3]=255;
   }
  }
+ // Original PutUnitSpriteIconsOam rescue indicator: tile 3, palette by passenger faction,
+ // offset (+9,+7), blink 20/32 updates and flag 132. MU presentation remains adapted.
+ if(clock%32<20&&!fe8_event_flag(132))for(int i=191;i>0;i--){struct Unit *u=units+i;if(!UNIT_IS_VALID(u)||!(u->state&US_RESCUING)||u->state&(US_HIDDEN|US_DEAD|US_NOT_DEPLOYED|US_RESCUED))continue;int faction=u->rescue>>6;if(faction>2)continue;int bank=faction==1?2:faction==2?1:0,x=u->xPos*16-cameraX+9,y=u->yPos*16-cameraY+7;for(int dy=0;dy<8;dy++)for(int dx=0;dx<8;dx++){int ink=rescueIconTile[dy*4+dx/2]>>((dx&1)*4)&15;if(!ink||x+dx<0||x+dx>=240||y+dy<0||y+dy>=160)continue;int color=gPaletteBuffer[448+bank*16+ink];u8 *p=rgba+((y+dy)*240+x+dx)*4;for(int c=0;c<3;c++){int v=color>>(c*5)&31;p[c]=(v<<3)|(v>>2);}p[3]=255;}}
+
 }
 
 
@@ -117,3 +125,5 @@ int fe8_units_errors(void){return unitError;}
 
 void fe8_unit_remove_index(int index){if(index>0&&index<256){memset(motions+index,0,sizeof(*motions));ClearUnit(GetUnit(index));}}
 void fe8_unit_remove(int pid){struct Unit *u=GetUnitFromCharId(pid);if(u){memset(motions+(u8)u->index,0,sizeof(*motions));ClearUnit(u);}}
+
+void fe8_unit_sync_position(int index){if(index<1||index>255||!UNIT_IS_VALID(units+index))return;struct Motion *m=motions+index;memset(m,0,sizeof(*m));m->px=m->tx=units[index].xPos*16;m->py=m->ty=units[index].yPos*16;}
