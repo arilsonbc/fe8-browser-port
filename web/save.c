@@ -55,6 +55,9 @@ static void SetGameTime(int time){(void)time;}
 static void InitUnits(void){} // No starting units are written here; original routine writes zero-packed units.
 static void ClearSupplyItems(void){memset(supply,0,sizeof(supply));}
 static u16 *GetConvoyItemArray(void){return supply;}
+static void CpuCopy16(const void *src,void *dst,int size){memcpy(dst,src,size);}
+#include "generated/progress_convoy_remove.h"
+int fe8_convoy_remove(int index){if(index<0||index>=100||!supply[index])return -1;int item=supply[index];RemoveItemFromConvoy(index);return item;}
 static void ResetPermanentFlags(void){memset(permanentFlags,0,sizeof(permanentFlags));}
 static const u8 *GetPermanentFlagBits(void){return permanentFlags;}
 static int GetPermanentFlagBitsSize(void){return 25;}

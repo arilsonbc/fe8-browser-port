@@ -31,6 +31,7 @@ void fe8_save_reset_empty(void);
 int fe8_convoy_count(void);
 int fe8_convoy_item(int index);
 int fe8_convoy_add(int item);
+int fe8_convoy_remove(int index);
 struct PlaySt *fe8_save_loaded_playst(void);
 int fe8_save_read_units(int slot,struct GameSavePackedUnit *out);
 #endif

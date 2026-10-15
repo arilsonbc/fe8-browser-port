@@ -7,7 +7,7 @@ for line in subprocess.check_output(['arm-none-eabi-nm','-S','fireemblem8.elf'],
  if len(p)==4:symbols[p[3]]=(int(p[0],16),int(p[1],16))
  elif len(p)==3:symbols[p[2]]=(int(p[0],16),0)
 def fn(file,name):
- s=(root/file).read_text();m=re.search(r'(?:(?:static )?inline )?(?:const s8\*|void|int|bool|s8|u8) '+name+r'\([^\n]*\)\s*\{',s);assert m,name
+ s=(root/file).read_text();m=re.search(r'(?:(?:static )?inline )?(?:const s8\*|void|int|bool8|bool|s8|u8) '+name+r'\([^\n]*\)\s*\{',s);assert m,name
  p=m.end();depth=1
  while depth:
   if s[p]=='{':depth+=1
@@ -52,7 +52,7 @@ functions.append(fn('src/bmtarget.c','TryAddToDropTargetList'));manifest.append(
 functions.append(fn('src/bmtarget.c','TryAddUnitToTradeTargetList'));manifest.append({'name':'TryAddUnitToTradeTargetList','source':'src/bmtarget.c'})
 functions.append(fn('src/uiutils.c','DrawUiFrame'));manifest.append({'name':'DrawUiFrame','source':'src/uiutils.c'})
 textSource=(root/'texts/texts.txt').read_text()
-for name,ident in [('tacticalSteal',0x67f),('tacticalChest',0x683),('tacticalDoor',0x684),('tacticalAttack',0x67b),('tacticalSeize',0x67a),('tacticalStaff',0x67c),('tacticalItem',0x68d),('tacticalTrade',0x68e),('tacticalRescue',0x689),('tacticalDrop',0x68a),('tacticalTake',0x68b),('tacticalGive',0x68c),('tacticalTalk',0x680),('tacticalVisit',0x682),('tacticalWait',0x695),('tacticalCancel',0x24),('tacticalEnd',0x6a0)]:
+for name,ident in [('tacticalSupply',0x68f),('tacticalSteal',0x67f),('tacticalChest',0x683),('tacticalDoor',0x684),('tacticalAttack',0x67b),('tacticalSeize',0x67a),('tacticalStaff',0x67c),('tacticalItem',0x68d),('tacticalTrade',0x68e),('tacticalRescue',0x689),('tacticalDrop',0x68a),('tacticalTake',0x68b),('tacticalGive',0x68c),('tacticalTalk',0x680),('tacticalVisit',0x682),('tacticalWait',0x695),('tacticalCancel',0x24),('tacticalEnd',0x6a0)]:
  message=re.search(r'^## MSG_'+format(ident,'03X')+r'\n(.*?)(?=^## |\Z)',textSource,re.M|re.S).group(1)
  text=re.sub(r'\[[^]]*\]','',message).strip();parts.append('static const char '+name+'[]='+json.dumps(text)+';')
 # Item names retain the original IDs decoded by prepare_events.py.
@@ -67,3 +67,10 @@ for name,ident in [('tacticalInventoryFull',0x866),('tacticalInventorySupply',0x
 print(f'Tactical: {len(functions)} original selection, movement/path and phase routines')
 steal=[fn('src/bmtarget.c','AddAsTarget_IfCanStealFrom'),fn('src/bmmenu.c','StealCommandUsability'),fn('src/bmmenu.c','StealItemMenuCommand_Usability')]
 (root/'web/generated/tactical_steal.h').write_text('\n'.join(steal))
+access=fn('src/bmcontainer.c','HasConvoyAccess').replace('bool8 HasConvoyAccess','u8 HasConvoyAccess')
+begin=access.index('    if (gGMData.state.bits.state_0)');end=access.index('    if (gPlaySt.chapterIndex',begin)
+access=access[:begin]+'    // World-map branch is not active in the native tactical frontend.\n'+access[end:]
+adjacent=fn('src/bmmenu.c','IsAdjacentForSupply')
+adjacent=adjacent.replace('        u8 other =','        if(x<0||y<0||x>=gBmMapSize.x||y>=gBmMapSize.y)continue;\n        u8 other =').replace('if (!unit)','if (!UNIT_IS_VALID(unit))')
+supply=['#include "constants/chapters.h"','enum {CHAPTER_MODE_EIRIKA=2,CHAPTER_MODE_EPHRAIM=3};','static const s8 gSupplyAdjacentPosLut[4][2]={{-1,0},{0,-1},{1,0},{0,1}};',access,adjacent,fn('src/bmmenu.c','SupplyUsability')]
+(root/'web/generated/tactical_supply.h').write_text('\n'.join(supply))
