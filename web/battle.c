@@ -42,8 +42,10 @@ extern int GetUnitItemCount(struct Unit *u);
 static void NewPopup_ItemGot(ProcPtr parent,struct Unit *u,int item){(void)parent;fe8_event_reward((u8)u->index,item,0);}
 static void NewPopup_GoldGot(ProcPtr parent,struct Unit *u,int amount){(void)parent;fe8_event_reward((u8)u->index,amount,1);}
 #include "generated/battle_routines.h"
+#include "generated/battle_obstacle.h"
+#include "constants/characters.h"
 static struct BattleHit script[BATTLE_HIT_MAX];
-static int normalBattle;
+static int normalBattle,obstacleX,obstacleY;
 static int simulationValid,simulationCount;
 static int scriptReady,active,timer,roundIndex,roundCount,actorIndex,targetIndex,error,completed;
 static int initialActorHP,initialTargetHP,displayActorHP,displayTargetHP;
@@ -58,7 +60,7 @@ static int Decode(const u32 *queue,int length,struct BattleHit *out){
  }
  return -3; // Require an explicit terminator before running source loops.
 }
-void fe8_battle_reset(void){simulationValid=simulationCount=0;memset(&gBattleStats,0,sizeof(gBattleStats));memset(&gBattleActor,0,sizeof(gBattleActor));memset(&gBattleTarget,0,sizeof(gBattleTarget));ClearBattleHits();memset(script,0,sizeof(script));gActionData.scriptedBattleHits=NULL;normalBattle=0;initialActorHP=initialTargetHP=displayActorHP=displayTargetHP=0;scriptReady=active=timer=roundIndex=roundCount=completed=0;error=0;actorIndex=targetIndex=0;}
+void fe8_battle_reset(void){simulationValid=simulationCount=0;memset(&gBattleStats,0,sizeof(gBattleStats));memset(&gBattleActor,0,sizeof(gBattleActor));memset(&gBattleTarget,0,sizeof(gBattleTarget));ClearBattleHits();memset(script,0,sizeof(script));gActionData.scriptedBattleHits=NULL;normalBattle=obstacleX=obstacleY=0;initialActorHP=initialTargetHP=displayActorHP=displayTargetHP=0;scriptReady=active=timer=roundIndex=roundCount=completed=0;error=0;actorIndex=targetIndex=0;}
 int fe8_battle_set_script(const u32 *queue,int length){struct BattleHit temporary[BATTLE_HIT_MAX];int n=Decode(queue,length,temporary);if(n<0)return n;memcpy(script,temporary,sizeof(script));scriptReady=1;return n;}
 static int Supported(struct Unit *u){
  if(!u||!UNIT_IS_VALID(u)||u->curHP<=0||u->xPos<0||u->yPos<0||u->state&(US_DEAD|US_IN_BALLISTA))return 0;
@@ -139,6 +141,12 @@ int fe8_battle_attack(int ai,int bi,int slot){
  roundCount=0;while(roundCount<BATTLE_HIT_MAX&&!(gBattleHitArray[roundCount].info&BATTLE_HIT_INFO_END))roundCount++;
  if(roundCount>=BATTLE_HIT_MAX){error=-5;return error;}normalBattle=1;roundIndex=timer=completed=error=0;active=1;return roundCount;
 }
+
+extern const struct CharacterData *GetCharacterData(int id);
+static int ObstaclePair(int ai,int x,int y,int slot){if(ai<1||ai>255||slot<0||slot>4||active||fe8_map_obstacle_hp(x,y)<=0)return -1;struct Unit *a=GetUnit(ai);if(!Supported(a)||a->state&(US_NOT_DEPLOYED|US_RESCUED)||!CanUnitUseWeapon(a,a->items[slot])||!IsItemCoveringRange(a->items[slot],abs(a->xPos-x)+abs(a->yPos-y)))return -2;return slot;}
+static void SetupObstacle(int ai,int x,int y,int slot){struct Unit *a=GetUnit(ai);memset(&gBattleActor,0,sizeof(gBattleActor));memset(&gBattleTarget,0,sizeof(gBattleTarget));memset(&gBattleStats,0,sizeof(gBattleStats));InitBattleUnit(&gBattleActor,a);gBattleTarget.unit.pClassData=GetClassData(CLASS_OBSTACLE);gBattleTarget.unit.pCharacterData=GetCharacterData(fe8_map_terrain(x,y)==27?CHARACTER_WALL:CHARACTER_SNAG);gBattleTarget.unit.maxHP=fe8_map_obstacle_max(x,y);gBattleTarget.unit.curHP=fe8_map_obstacle_hp(x,y);gBattleTarget.unit.xPos=x;gBattleTarget.unit.yPos=y;gBattleTarget.statusOut=-1;gBattleStats.config=BATTLE_CONFIG_REAL|BATTLE_CONFIG_MAPANIMS;gBattleStats.range=abs(a->xPos-x)+abs(a->yPos-y);SetBattleUnitWeapon(&gBattleActor,slot);SetBattleUnitWeapon(&gBattleTarget,-1);BattleInitTargetCanCounter();BattleApplyWeaponTriangleEffect(&gBattleActor,&gBattleTarget);Terrain(&gBattleActor);Terrain(&gBattleTarget);ComputeBattleUnitStats(&gBattleActor,&gBattleTarget);ComputeBattleUnitStats(&gBattleTarget,&gBattleActor);ComputeBattleUnitEffectiveStats(&gBattleActor,&gBattleTarget);ComputeBattleUnitEffectiveStats(&gBattleTarget,&gBattleActor);ComputeBattleObstacleStats();}
+int fe8_battle_obstacle_forecast(int ai,int x,int y,int slot,int field){if(ObstaclePair(ai,x,y,slot)<0)return -1;SetupObstacle(ai,x,y,slot);switch(field){case 0:return gBattleActor.battleAttack>gBattleTarget.battleDefense?gBattleActor.battleAttack-gBattleTarget.battleDefense:0;case 1:return gBattleActor.battleEffectiveHitRate;case 2:return gBattleActor.battleEffectiveCritRate;case 3:return 1;case 4:return slot;default:return -1;}}
+int fe8_battle_obstacle_attack(int ai,int x,int y,int slot){if(ObstaclePair(ai,x,y,slot)<0)return -1;EquipUnitItemSlot(GetUnit(ai),slot);SetupObstacle(ai,x,y,0);gActionData.scriptedBattleHits=NULL;BattleUnwind();actorIndex=ai;targetIndex=0;obstacleX=x;obstacleY=y;initialActorHP=displayActorHP=GetUnit(ai)->curHP;initialTargetHP=displayTargetHP=fe8_map_obstacle_hp(x,y);roundCount=0;while(roundCount<BATTLE_HIT_MAX&&!(gBattleHitArray[roundCount].info&BATTLE_HIT_INFO_END))roundCount++;if(roundCount>=BATTLE_HIT_MAX){error=-5;return error;}normalBattle=3;roundIndex=timer=completed=error=0;active=1;return roundCount;}
 static void CommitNormal(struct Unit *u,struct BattleUnit *bu){
  if(bu->canCounter&&bu->weaponSlotIndex<5)bu->unit.items[bu->weaponSlotIndex]=bu->weapon;
  UpdateUnitFromBattle(u,bu);
@@ -148,7 +156,7 @@ void fe8_battle_tick(void){
  timer++;
  if(timer==24&&roundIndex<roundCount){struct BattleHit *h=gBattleHitArray+roundIndex;if(!(h->attributes&BATTLE_HIT_ATTR_MISS)){int *hp=(h->attributes&BATTLE_HIT_ATTR_DEVIL)?((h->info&BATTLE_HIT_INFO_RETALIATION)?&displayTargetHP:&displayActorHP):((h->info&BATTLE_HIT_INFO_RETALIATION)?&displayActorHP:&displayTargetHP);*hp-=h->hpChange;if(*hp<0)*hp=0;}}
  if(timer>=60){timer=0;roundIndex++;}
- if(roundIndex>=roundCount){struct Unit *a=GetUnit(actorIndex),*b=GetUnit(targetIndex);if(normalBattle){CommitNormal(a,&gBattleActor);CommitNormal(b,&gBattleTarget);}else{a->curHP=gBattleActor.unit.curHP;b->curHP=gBattleTarget.unit.curHP;a->state&=~US_UNSELECTABLE;b->state&=~US_UNSELECTABLE;}if(normalBattle&&fe8_tactical_rescue_death(actorIndex,targetIndex)<0)error=-12;if(!a->curHP)a->state|=US_HIDDEN|US_DEAD;if(!b->curHP)b->state|=US_HIDDEN|US_DEAD;active=0;completed++;if(normalBattle)fe8_death_after_battle(actorIndex,targetIndex);if(normalBattle==1){struct CombatActionProc proc={0};BATTLE_HandleItemDrop(&proc);}}
+ if(roundIndex>=roundCount){struct Unit *a=GetUnit(actorIndex),*b=normalBattle==3?&gBattleTarget.unit:GetUnit(targetIndex);if(normalBattle==3){CommitNormal(a,&gBattleActor);if(fe8_map_obstacle_update(obstacleX,obstacleY,gBattleTarget.unit.curHP)<0)error=-13;active=0;completed++;if(!a->curHP){a->state|=US_HIDDEN|US_DEAD;fe8_death_after_battle(actorIndex,0);}return;}if(normalBattle){CommitNormal(a,&gBattleActor);CommitNormal(b,&gBattleTarget);}else{a->curHP=gBattleActor.unit.curHP;b->curHP=gBattleTarget.unit.curHP;a->state&=~US_UNSELECTABLE;b->state&=~US_UNSELECTABLE;}if(normalBattle&&fe8_tactical_rescue_death(actorIndex,targetIndex)<0)error=-12;if(!a->curHP)a->state|=US_HIDDEN|US_DEAD;if(!b->curHP)b->state|=US_HIDDEN|US_DEAD;active=0;completed++;if(normalBattle)fe8_death_after_battle(actorIndex,targetIndex);if(normalBattle==1){struct CombatActionProc proc={0};BATTLE_HandleItemDrop(&proc);}}
 }
 int fe8_battle_busy(void){return active;}
 extern int GetUnitItemHealAmount(struct Unit *u,int item);
@@ -166,11 +174,11 @@ int fe8_battle_heal(int actor,int target,int slot){
  gBattleActor.weapon=GetItemAfterUse(item);gBattleActor.unit.items[slot]=gBattleActor.weapon;gBattleActor.weaponBroke=!gBattleActor.weapon;
  actorIndex=actor;targetIndex=target;initialActorHP=displayActorHP=a->curHP;initialTargetHP=displayTargetHP=hp;roundCount=1;roundIndex=timer=completed=error=0;normalBattle=2;active=1;return next-hp;
 }
-int fe8_battle_info(int field){switch(field){case 0:return active;case 1:return roundIndex;case 2:return roundCount;case 3:return actorIndex;case 4:return targetIndex;case 5:return initialActorHP;case 6:return initialTargetHP;case 7:return gBattleActor.unit.curHP;case 8:return gBattleTarget.unit.curHP;case 9:return completed;case 10:return gBattleActor.battleAttack;case 11:return gBattleTarget.battleAttack;case 12:return gBattleActor.battleDefense;case 13:return gBattleTarget.battleDefense;case 14:return error;case 15:return displayActorHP;case 16:return displayTargetHP;case 17:return timer;case 18:return normalBattle;case 19:return gBattleActor.expGain;case 27:return gBattleTarget.expGain;case 28:return gBattleActor.unit.level;case 29:return gBattleActor.unit.exp;default:if(field>=20&&field<20+BATTLE_HIT_MAX)return gBattleHitArray[field-20].hpChange;if(field>=30&&field<30+BATTLE_HIT_MAX)return gBattleHitArray[field-30].attributes;if(field>=40&&field<40+BATTLE_HIT_MAX)return gBattleHitArray[field-40].info;return -1;}}
+int fe8_battle_info(int field){switch(field){case 0:return active;case 1:return roundIndex;case 2:return roundCount;case 3:return actorIndex;case 4:return targetIndex;case 5:return initialActorHP;case 6:return initialTargetHP;case 7:return gBattleActor.unit.curHP;case 8:return gBattleTarget.unit.curHP;case 9:return completed;case 10:return gBattleActor.battleAttack;case 11:return gBattleTarget.battleAttack;case 12:return gBattleActor.battleDefense;case 13:return gBattleTarget.battleDefense;case 14:return error;case 15:return displayActorHP;case 16:return displayTargetHP;case 17:return timer;case 18:return normalBattle;case 60:return gBattleTarget.unit.maxHP;case 19:return gBattleActor.expGain;case 27:return gBattleTarget.expGain;case 28:return gBattleActor.unit.level;case 29:return gBattleActor.unit.exp;default:if(field>=20&&field<20+BATTLE_HIT_MAX)return gBattleHitArray[field-20].hpChange;if(field>=30&&field<30+BATTLE_HIT_MAX)return gBattleHitArray[field-30].attributes;if(field>=40&&field<40+BATTLE_HIT_MAX)return gBattleHitArray[field-40].info;return -1;}}
 static void Pixel(u8 *rgba,int x,int y,int color){if(x<0||y<0||x>=240||y>=160)return;u8 *p=rgba+(y*240+x)*4;for(int c=0;c<3;c++){int v=color>>(c*5)&31;p[c]=(v<<3)|(v>>2);}p[3]=255;}
 void fe8_battle_render(u8 *rgba,int cameraX,int cameraY){
  if(!active)return;
- struct Unit *a=GetUnit(actorIndex),*b=GetUnit(targetIndex);struct Unit *units[2]={a,b};int hp[2]={displayActorHP,displayTargetHP};
+ struct Unit *a=GetUnit(actorIndex),*b=normalBattle==3?&gBattleTarget.unit:GetUnit(targetIndex);struct Unit *units[2]={a,b};int hp[2]={displayActorHP,displayTargetHP};
  for(int i=0;i<2;i++){int x=units[i]->xPos*16-cameraX,y=units[i]->yPos*16-cameraY+16,max=units[i]->maxHP;for(int dx=0;dx<16;dx++)for(int dy=0;dy<3;dy++)Pixel(rgba,x+dx,y+dy,dy==1&&dx*max<hp[i]*16?0x3e0:0);}
  if(timer>=20&&timer<32&&roundIndex<roundCount){struct BattleHit *h=gBattleHitArray+roundIndex;struct Unit *u=(h->info&BATTLE_HIT_INFO_RETALIATION)?a:b;int x=u->xPos*16-cameraX,y=u->yPos*16-cameraY;if(!(h->attributes&BATTLE_HIT_ATTR_MISS))for(int dx=-2;dx<18;dx++)for(int dy=-2;dy<18;dy++)if(dx==-2||dy==-2||dx==17||dy==17)Pixel(rgba,x+dx,y+dy,0x7fff);}
 }

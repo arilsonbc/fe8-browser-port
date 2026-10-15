@@ -3,6 +3,8 @@
 #include "generated/unit_types.h"
 void fe8_units_reset(void);
 void fe8_units_chapter_cleanup(void);
+int fe8_units_load_event(u32 address,int animated,int cutscene);
+int fe8_unit_steal(int actor,int target,int slot);
 int fe8_units_load(u32 address,int animated);
 int fe8_units_restore(int slot);
 void fe8_units_tick(void);

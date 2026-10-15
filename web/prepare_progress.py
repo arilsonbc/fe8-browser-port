@@ -3,7 +3,7 @@ import re,hashlib,subprocess
 root=Path(__file__).resolve().parent.parent
 rom=(root/'baserom.gba').read_bytes();assert hashlib.sha1(rom).hexdigest()=='c25b145e37456171ada4b0d440bf88a19f4d509f'
 def function(file,name):
- s=(root/file).read_text();m=re.search(r'(?:void|u32|u8|s8|int|struct Unit \*) '+name+r'\([^\n]*\)\s*\{',s);assert m,name;i=m.end();depth=1
+ s=(root/file).read_text();m=re.search(r'(?:void|bool|u32|u8|s8|int|struct Unit \*) '+name+r'\([^\n]*\)\s*\{',s);assert m,name;i=m.end();depth=1
  while depth:
   if s[i]=='{':depth+=1
   if s[i]=='}':depth-=1
@@ -28,3 +28,14 @@ print('Progress: original chapter cleanup, transition/check handlers and difficu
 (root/'web/generated/progress_loca.h').write_text(function('src/eventinfo.c','EvCheck05_LOCA')+'\n'+function('src/eventinfo.c','EvCheck03_CHAR'))
 
 (root/'web/generated/progress_icons.h').write_text(function('src/eventcall.c','UnsetEventId_0x84'))
+
+# Keys: original event matching and item eligibility/consumption, native presentation.
+parts=['struct EvCheck07 {u32 unk0;u16 givenItem,givenMoney;u8 x,y;u16 cmdId;};','struct EvCheck08 {u32 unk0,script,unk8;};']
+parts += [function('src/eventinfo.c',n).replace('#if !NONMATCHING',' #if 0') for n in ['EvCheck07_CHES','EvCheck08_DOOR']]
+(root/'web/generated/progress_keyevents.h').write_text('\n'.join(parts))
+parts=[function('src/bmitem.c' if n=='GetUnitItemSlot' else 'src/bmunit.c',n) for n in ['GetUnitItemSlot','GetUnitKeyItemSlotForTerrain','UnitUpdateUsedItem']]
+parts += [function('src/bmitemuse.c','CanUnitUseChestKeyItem')]
+parts.append(function('src/bmusemind.c','ExecKeyItem').replace('gBattleTarget.statusOut = -1;','// Native key action has no BattleUnit presentation.'))
+(root/'web/generated/progress_keys.h').write_text('\n'.join(f[:f.index('{')].strip()+';' for f in parts)+'\n'+'\n'.join(parts))
+
+(root/'web/generated/progress_cutscene.h').write_text(function('src/bmunit.c','ClearCutsceneUnits'))

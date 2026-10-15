@@ -52,7 +52,7 @@ functions.append(fn('src/bmtarget.c','TryAddToDropTargetList'));manifest.append(
 functions.append(fn('src/bmtarget.c','TryAddUnitToTradeTargetList'));manifest.append({'name':'TryAddUnitToTradeTargetList','source':'src/bmtarget.c'})
 functions.append(fn('src/uiutils.c','DrawUiFrame'));manifest.append({'name':'DrawUiFrame','source':'src/uiutils.c'})
 textSource=(root/'texts/texts.txt').read_text()
-for name,ident in [('tacticalAttack',0x67b),('tacticalSeize',0x67a),('tacticalStaff',0x67c),('tacticalItem',0x68d),('tacticalTrade',0x68e),('tacticalRescue',0x689),('tacticalDrop',0x68a),('tacticalTake',0x68b),('tacticalGive',0x68c),('tacticalTalk',0x680),('tacticalVisit',0x682),('tacticalWait',0x695),('tacticalCancel',0x24),('tacticalEnd',0x6a0)]:
+for name,ident in [('tacticalChest',0x683),('tacticalDoor',0x684),('tacticalAttack',0x67b),('tacticalSeize',0x67a),('tacticalStaff',0x67c),('tacticalItem',0x68d),('tacticalTrade',0x68e),('tacticalRescue',0x689),('tacticalDrop',0x68a),('tacticalTake',0x68b),('tacticalGive',0x68c),('tacticalTalk',0x680),('tacticalVisit',0x682),('tacticalWait',0x695),('tacticalCancel',0x24),('tacticalEnd',0x6a0)]:
  message=re.search(r'^## MSG_'+format(ident,'03X')+r'\n(.*?)(?=^## |\Z)',textSource,re.M|re.S).group(1)
  text=re.sub(r'\[[^]]*\]','',message).strip();parts.append('static const char '+name+'[]='+json.dumps(text)+';')
 # Item names retain the original IDs decoded by prepare_events.py.

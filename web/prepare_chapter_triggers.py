@@ -11,5 +11,5 @@ for file,name in names:
   p+=1
  parts.append(s[m.start():p])
 (root/'web/generated/chapter_trigger_routines.h').write_text('\n'.join(parts))
-(root/'web/generated/chapter_trigger_assets.json').write_text(json.dumps({'routines':names,'limits':['Prologue turn/misc lists only','FIFO bounded to four lists; callbacks/AI still pending','call preserves flags/tactical state/SRAM']},indent=2))
+(root/'web/generated/chapter_trigger_assets.json').write_text(json.dumps({'routines':names,'limits':['Known chapters 0..3 turn/misc lists','FIFO bounded to four lists; unknown callbacks remain guarded','call preserves flags/tactical state/SRAM']},indent=2))
 print('Chapter triggers: original turn/AFEV checks and ChangeUnitAi')

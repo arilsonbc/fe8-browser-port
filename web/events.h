@@ -9,6 +9,7 @@ void fe8_event_reset(void);
 void fe8_event_actor(int index);
 int fe8_event_tile_command(int x,int y);
 int fe8_event_seize(int index);
+int fe8_event_unlock(int index,int x,int y);
 int fe8_event_pillage(int index);
 void fe8_event_show_icons(void);
 void fe8_event_reward(int unit,int item,int gold);

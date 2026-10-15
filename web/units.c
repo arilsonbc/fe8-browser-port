@@ -13,6 +13,7 @@ extern void SetUnitStatus(struct Unit *u,int status);
 #define UNIT_IS_PHANTOM(u) ((u)->pClassData->number==CLASS_PHANTOM)
 #define gPlaySt (*fe8_save_loaded_playst())
 #include <string.h>
+#include <stdlib.h>
 #include "generated/unit_assets.h"
 static struct Unit units[256];
 struct Unit *GetUnit(int index){return &units[index&255];}
@@ -28,14 +29,16 @@ static void ReadSramFast(const void *src,void *dst,int size){memcpy(dst,src,size
 #include "generated/unit_routines.h"
 #include "generated/progress_levels.h"
 #include "generated/progress_units.h"
+#include "generated/progress_cutscene.h"
 extern struct Unit *gActiveUnit;
 #include "generated/progress_faction.h"
 struct Motion {int px,py;const struct REDA *redas;int count,step,delay;int tx,ty,manual;};
 static struct Motion motions[256];
-static int unitError;
+static int unitError,loadCutscene;
 void fe8_units_reset(void){InitUnits();memset(motions,0,sizeof(motions));unitError=0;}
 struct Unit *fe8_unit_by_pid(int pid){return GetUnitFromCharId(pid);}
 void fe8_units_chapter_cleanup(void){ChapterChangeUnitCleanup();memset(motions,0,sizeof(motions));}
+int fe8_units_load_event(u32 address,int animated,int cutscene){loadCutscene=cutscene;int result=fe8_units_load(address,animated);loadCutscene=0;return result;}
 int fe8_units_load(u32 address,int animated){
  const struct UnitDefinition *defs=NULL;int count=0;
  for(int i=0;i<sizeof(unitDefinitions)/sizeof(*unitDefinitions);i++)if(unitDefinitions[i].address==address){defs=unitDefinitions[i].data;count=unitDefinitions[i].count;break;}
@@ -45,10 +48,11 @@ int fe8_units_load(u32 address,int animated){
  for(int i=0;i<count;i++){
   const struct UnitDefinition *d=defs+i;int faction=d->allegiance==2?128:d->allegiance==1?64:0;
   struct Unit *u=faction==0?GetUnitFromCharId(d->charIndex):NULL;if(!u||UNIT_FACTION(u)!=faction)u=GetFreeUnit(faction);if(!u){unitError++;return -3;}
-  int reuse=(gPlaySt.chapterIndex==1||gPlaySt.chapterIndex==2||gPlaySt.chapterIndex==0x38)&&faction==0&&UNIT_IS_VALID(u);
+  int existed=UNIT_IS_VALID(u);int reuse=(gPlaySt.chapterIndex==1||gPlaySt.chapterIndex==2||gPlaySt.chapterIndex==3||gPlaySt.chapterIndex==0x38)&&faction==0&&UNIT_IS_VALID(u);
   if(!reuse){ClearUnit(u);UnitInitFromDefinition(u,d);UnitLoadStatsFromChracter(u,u->pCharacterData);UnitLoadSupports(u);if(d->autolevel)UnitAutolevel(u);UnitCheckStatCaps(u);SetUnitHp(u,GetUnitMaxHp(u));}
   else {s8 x,y;GenUnitDefinitionFinalPosition(d,&x,&y,0);u->xPos=x;u->yPos=y;u->state&=~US_UNSELECTABLE;}
-  if((gPlaySt.chapterIndex==1||gPlaySt.chapterIndex==2)&&faction==128){int bonus=gPlaySt.chapterStateBits&PLAY_FLAG_HARD?progressChapters[(u8)gPlaySt.chapterIndex].hard:-(gPlaySt.config.controller?progressChapters[(u8)gPlaySt.chapterIndex].normal:progressChapters[(u8)gPlaySt.chapterIndex].easy);UnitApplyBonusLevels(u,bonus);}
+  if((gPlaySt.chapterIndex>=1&&gPlaySt.chapterIndex<=3)&&faction==128){int bonus=gPlaySt.chapterStateBits&PLAY_FLAG_HARD?progressChapters[(u8)gPlaySt.chapterIndex].hard:-(gPlaySt.config.controller?progressChapters[(u8)gPlaySt.chapterIndex].normal:progressChapters[(u8)gPlaySt.chapterIndex].easy);UnitApplyBonusLevels(u,bonus);}
+  if(faction==0){if(loadCutscene){if(!existed||u->state&US_DEAD)u->state|=US_BIT22;}else u->state&=~US_BIT22;}
   if(!(u->state&US_DEAD))u->state&=~(US_HIDDEN|US_NOT_DEPLOYED);
   if(d->itemDrop)u->state|=US_DROP_ITEM;
   struct Motion *m=&motions[(u8)u->index];memset(m,0,sizeof(*m));m->px=u->xPos*16;m->py=u->yPos*16;
@@ -69,7 +73,7 @@ void fe8_units_tick(void){
  }
 }
 int fe8_units_busy(void){for(int i=1;i<256;i++)if(UNIT_IS_VALID(units+i)&&(motions[i].step<motions[i].count||motions[i].manual||motions[i].delay))return 1;return 0;}
-void fe8_units_clear_faction(int faction){for(int i=faction+1;i<faction+64&&i<256;i++){ClearUnit(units+i);memset(motions+i,0,sizeof(*motions));}}
+void fe8_units_clear_faction(int faction){for(int i=faction+1;i<faction+64&&i<256;i++){struct Unit *u=units+i;if(!UNIT_IS_VALID(u))continue;if(faction==0){u->state|=US_HIDDEN;u->state&=~(US_UNSELECTABLE|US_RESCUING|US_RESCUED);}else ClearUnit(u);memset(motions+i,0,sizeof(*motions));}if(faction==0)ClearCutsceneUnits();}
 int fe8_unit_make_item(int item){return MakeNewItem(item);}
 int fe8_unit_give(int pid,int item){struct Unit *u=GetUnitFromCharId(pid);return u?UnitAddItem(u,MakeNewItem(item)):-1;}
 int fe8_units_restore(int slot){
@@ -127,3 +131,6 @@ void fe8_unit_remove_index(int index){if(index>0&&index<256){memset(motions+inde
 void fe8_unit_remove(int pid){struct Unit *u=GetUnitFromCharId(pid);if(u){memset(motions+(u8)u->index,0,sizeof(*motions));ClearUnit(u);}}
 
 void fe8_unit_sync_position(int index){if(index<1||index>255||!UNIT_IS_VALID(units+index))return;struct Motion *m=motions+index;memset(m,0,sizeof(*m));m->px=m->tx=units[index].xPos*16;m->py=m->ty=units[index].yPos*16;}
+
+extern void UnitRemoveInvalidItems(struct Unit *u);
+int fe8_unit_steal(int actor,int target,int slot){if(actor<1||actor>255||target<1||target>255||actor==target||slot<0||slot>4)return -1;struct Unit *a=GetUnit(actor),*b=GetUnit(target);if(!UNIT_IS_VALID(a)||!UNIT_IS_VALID(b)||a->state&(US_DEAD|US_RESCUED)||b->state&(US_DEAD|US_RESCUED)||abs(a->xPos-b->xPos)+abs(a->yPos-b->yPos)!=1||!b->items[slot])return -2;if(!UnitAddItem(a,b->items[slot]))return -3;b->items[slot]=0;UnitRemoveInvalidItems(b);return 0;} // Original AiStartStealAction inventory effects; animated popup deferred.

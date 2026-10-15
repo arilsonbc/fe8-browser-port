@@ -35,7 +35,8 @@ functions=[fn('src/cp_battle.c',n) for n in names]+[fn('src/cp_utility.c',n) for
 for i,f in enumerate(functions):
  if f.startswith('s8 AiAttemptOffensiveAction'):
   start=f.index('    if (gActiveUnit->state & US_IN_BALLISTA)');end=f.index('    SetWorkingBmMap',start)
-  f=f[:start]+'''    if(gActiveUnit->state&US_IN_BALLISTA || UNIT_CATTRIBUTES(gActiveUnit)&CA_STEAL || (UNIT_CATTRIBUTES(gActiveUnit)&CA_BALLISTAE && gPlaySt.chapterIndex>2)){vmError=7;return 0;}
+  f=f[:start]+'''    if(gActiveUnit->state&US_IN_BALLISTA || (UNIT_CATTRIBUTES(gActiveUnit)&CA_BALLISTAE && gPlaySt.chapterIndex>3)){vmError=7;return 0;}
+    if((UNIT_CATTRIBUTES(gActiveUnit)&CA_STEAL)&&GetUnitItemCount(gActiveUnit)<5){GenerateUnitMovementMap(gActiveUnit);MarkMovementMapEdges();if(AiAttemptStealActionWithinMovement()==1)return 0;}
     if(gAiState.flags&AI_FLAG_STAY){BmMapFill(gBmMapMovement,255);gBmMapMovement[gActiveUnit->yPos][gActiveUnit->xPos]=0;}else GenerateUnitMovementMap(gActiveUnit);
 ''' +f[end:]
   start=f.index('try_ballist_combat:');end=f.index('    if ((finalResult.score',start);f=f[:start]+f[end:]
@@ -57,6 +58,6 @@ for i,f in enumerate(functions):
  functions[i]=f
 (root/'web/generated/ai_combat_assets.h').write_text('\n'.join(assets))
 (root/'web/generated/ai_combat_routines.h').write_text('\n'.join(f[:f.index('{')].strip()+';' for f in functions)+'\n'+'\n'.join(functions))
-(root/'web/generated/ai_combat_assets.json').write_text(json.dumps({'routines':names+['AiGetClassRank','AiReachesByBirdsEyeDistance','AiUpdateNoMoveFlag','AiUpdateGetUnitIsHealing'],'coefficientRows':(len(coeff)-1)//20,'adaptations':['map edges guarded before access','bugged friend-zone offset retained','class rank 9 reads original GBA row padding retained as explicit native bytes','ballista/steal/magic unsupported branches guarded','missing return defined from decision flag']},indent=2))
+(root/'web/generated/ai_combat_assets.json').write_text(json.dumps({'routines':names+['AiGetClassRank','AiReachesByBirdsEyeDistance','AiUpdateNoMoveFlag','AiUpdateGetUnitIsHealing'],'coefficientRows':(len(coeff)-1)//20,'adaptations':['map edges guarded before access','bugged friend-zone offset retained','class rank 9 reads original GBA row padding retained as explicit native bytes','ballista/magic unsupported branches guarded; steal uses original item-priority routines','missing return defined from decision flag']},indent=2))
 print('AI combat: 22 original routines, ROM coefficient/rank/offset/healing data')
 

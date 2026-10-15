@@ -25,6 +25,7 @@ extern int fe8_event_busy(void);
 extern int fe8_event_fade_level(void),fe8_event_fade_mode(void);
 static struct KeyStatusBuffer *gKeyStatusPtr;
 static int active=-1,frame,sound=-1,errors;
+static u8 obstacleHp[64][64];
 #define DPAD_ANY 240
 #define MAP_MOVEMENT_MAX 120
 #define SONG_65 0x65
@@ -54,7 +55,7 @@ int fe8_map_start(int chapter){
  memcpy(bgVram+0x8000,a->gfx1,a->gfx1Size);if(a->gfx2Size)memcpy(bgVram+0xc000,a->gfx2,a->gfx2Size);
  for(int y=0;y<64;y++){gBmMapBaseTiles[y]=baseCells[y];gBmMapTerrain[y]=terrainCells[y];gBmMapFog[y]=fogCells[y];gBmMapMovement[y]=movementCells[y];}
  for(int y=0;y<gBmMapSize.y;y++)for(int x=0;x<gBmMapSize.x;x++){baseCells[y][x]=a->map[1+y*gBmMapSize.x+x];fogCells[y][x]=1;movementCells[y][x]=MAP_MOVEMENT_MAX;}
- RefreshTerrainBmMap();
+ RefreshTerrainBmMap();memset(obstacleHp,0,sizeof(obstacleHp));for(int y=0;y<gBmMapSize.y;y++)for(int x=0;x<gBmMapSize.x;x++){if(terrainCells[y][x]==27&&(y==0||terrainCells[y-1][x]!=27))obstacleHp[y][x]=chapterWallHp[chapter];else if(terrainCells[y][x]==51)obstacleHp[y][x]=20;}
  fe8_palette_reset();memcpy(gPaletteBuffer+96,a->palette,320);memcpy(gPaletteBuffer+256,mapUiPalette,64);fe8_units_apply_palette();
  memset(objVram,0,sizeof(objVram));for(int row=0;row<4;row++)memcpy(objVram+row*1024,mapUi+row*18*32,18*32);
  gBmSt.cameraMax.x=gBmMapSize.x*16-240;gBmSt.cameraMax.y=gBmMapSize.y*16-160;
@@ -125,3 +126,8 @@ int fe8_map_change(int id,int revert){
 int fe8_map_change_at(int x,int y){if(active<0||x<0||y<0||x>=gBmMapSize.x||y>=gBmMapSize.y)return -1;return GetMapChangeIdAt(x,y);}
 
 void fe8_map_focus(int x,int y){if(active<0)return;if(x<0)x=0;if(y<0)y=0;if(x>=gBmMapSize.x)x=gBmMapSize.x-1;if(y>=gBmMapSize.y)y=gBmMapSize.y-1;SetCursorMapPosition(x,y);gBmSt.camera.x=x*16-120;gBmSt.camera.y=y*16-80;if(gBmSt.camera.x<0)gBmSt.camera.x=0;if(gBmSt.camera.x>gBmSt.cameraMax.x)gBmSt.camera.x=gBmSt.cameraMax.x;if(gBmSt.camera.y<0)gBmSt.camera.y=0;if(gBmSt.camera.y>gBmSt.cameraMax.y)gBmSt.camera.y=gBmSt.cameraMax.y;gBmSt.camera.x&=~15;gBmSt.camera.y&=~15;}
+
+static int ObstacleRoot(int x,int y){if(active<0||x<0||y<0||x>=gBmMapSize.x||y>=gBmMapSize.y)return -1;if(terrainCells[y][x]==27){while(y>0&&terrainCells[y-1][x]==27)y--;}else if(terrainCells[y][x]!=51)return -1;return y;}
+int fe8_map_obstacle_hp(int x,int y){int root=ObstacleRoot(x,y);return root<0?-1:obstacleHp[root][x];}
+int fe8_map_obstacle_max(int x,int y){return ObstacleRoot(x,y)<0?-1:terrainCells[y][x]==51?20:chapterWallHp[active];}
+int fe8_map_obstacle_update(int x,int y,int hp){int root=ObstacleRoot(x,y);if(root<0||hp<0||hp>fe8_map_obstacle_max(x,y)||!obstacleHp[root][x])return -1;if(!hp){int change=fe8_map_change_at(x,y);if(change<0)return -2;if(fe8_map_change(change,0)<0)return -3;}obstacleHp[root][x]=hp;return 0;} // Native trap HP/terrain update; original map changes retained, crossfade adapted.

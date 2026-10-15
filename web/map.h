@@ -1,6 +1,9 @@
 #ifndef FE8_MAP_H
 #define FE8_MAP_H
 #include "compat.h"
+int fe8_map_obstacle_hp(int x,int y);
+int fe8_map_obstacle_max(int x,int y);
+int fe8_map_obstacle_update(int x,int y,int hp);
 int fe8_map_start(int chapter);
 void fe8_map_stop(void);
 void fe8_map_tick(int keys);

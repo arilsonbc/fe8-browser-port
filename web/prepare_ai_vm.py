@@ -48,7 +48,7 @@ for file,name in [('src/cp_utility.c','AiCompare'),('src/cp_utility.c','AiFindTa
  if name=='AiFindTargetInReachByCharId':
   f=f.replace('        if (gBmMapRange[unit->yPos][unit->xPos]', '        if(unit->xPos<0||unit->yPos<0||unit->xPos>=gBmMapSize.x||unit->yPos>=gBmMapSize.y)continue;\n        if (gBmMapRange[unit->yPos][unit->xPos]')
   f=f.replace('    if (!(GetUnitFromCharId(uid)->state & US_UNAVAILABLE))', '    struct Unit *target=GetUnitFromCharId(uid);if(!target){gAiState.cmd_result[0]=1;return 0;}\n    if (!(target->state & US_UNAVAILABLE))')
- if name=='AiTryMoveTowards':f=f.replace('    s16 ix;', '    if((maxDanger!=255&&!runtimeHealing)||!unk){vmError=6;return;}\n    s16 ix;')
+ if name=='AiTryMoveTowards':f=f.replace('    s16 ix;', '    if(maxDanger!=255&&!runtimeHealing){vmError=6;return;}\n    s16 ix;')
  functions.append(f)
 parts.append('#define AI_VM_STATE_KEY '+str(symbols['gAiState'][0]))
 (root/'web/generated/ai_vm_assets.h').write_text('\n'.join(parts))

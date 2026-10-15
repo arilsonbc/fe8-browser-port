@@ -41,7 +41,7 @@ int fe8_ai_info(int field){if(field==0)return prepared;if(field==1)return phaseI
 #include "generated/ai_vm_assets.h"
 static struct AiScr **gpAi1Table[]={aiVmA},**gpAi2Table[]={aiVmB};
 static struct Unit *aiScriptUnit;
-static struct {int decideState,unk7E,bestBlueMov,dangerMapFilled,flags,combatWeightTableId;u8 cmd_result[8];} aiVmState;
+static struct {int decideState,unk7E,bestBlueMov,dangerMapFilled,flags,combatWeightTableId;u32 specialItemFlags;u8 cmd_result[8];} aiVmState;
 static struct AiDecision gAiDecision;
 static struct Vec2 gBmMapSize;
 static u8 vmTerrain[64][64];
@@ -60,9 +60,9 @@ static struct AiScr *gpAiScriptCurrent;
 static int gAiScriptEnded,gAiScriptKind,vmError,vmSteps,vmIndex,vmPc,vmAi1,vmAi2;
 static s8 AiVmCompareKey(const void *key,u8 op,u32 right);
 static void GenerateExtendedMovementMapOnRange(int x,int y,const s8 *costs){(void)costs;if(fe8_tactical_probe_movement(aiScriptUnit,x,y,120,0,(u8*)vmRange)<0)vmError=6;}
-static const s8 *GetUnitMovementCost(struct Unit *u){(void)u;return NULL;} // Tactical helper selects the original class/weather cost table.
+static const s8 *GetUnitMovementCost(struct Unit *u){return fe8_tactical_movement_cost(u);} // Tactical helper selects the original class/weather cost table.
 static void GenerateUnitMovementMap(struct Unit *u){gWorkingBmMap=gBmMapRange;if(fe8_tactical_probe_movement(u,u->xPos,u->yPos,UNIT_MOV(u),(u8)u->index,(u8*)vmMove)<0)vmError=6;}
-static void sub_80410C4(int x,int y,struct Unit *u){(void)x;(void)y;(void)u;vmError=6;} // Wall-neglect variant is refused by the caller guard.
+static void sub_80410C4(int x,int y,struct Unit *u){if(fe8_tactical_probe_movement(u,x,y,120,(u8)u->index,(u8*)vmRange)<0)vmError=6;} // Original extended range with the acting unit occupancy index.
 static s8 AiCheckDangerAt(int x,int y,u8 limit){return vmDanger[y][x]<=limit;} // Only limit 255 is accepted; no danger value can exclude a tile.
 static s8 AiIsUnitEnemyAndNotInScrList(struct Unit *u){(void)u;vmError=6;return 0;} // Ignore-list pointers are not dereferenced.
 static void MarkWorkingMapEdges(void){for(int y=gBmMapSize.y-1;y>=0;y--)for(int x=gBmMapSize.x-1;x>=0;x--){if(vmRange[y][x]>=120)continue;if(x>0&&(s8)vmRange[y][x-1]<0)vmRange[y][x-1]=120;if(x+1<gBmMapSize.x&&(s8)vmRange[y][x+1]<0)vmRange[y][x+1]=120;if(y>0&&(s8)vmRange[y-1][x]<0)vmRange[y-1][x]=120;if(y+1<gBmMapSize.y&&(s8)vmRange[y+1][x]<0)vmRange[y+1][x]=120;}}
@@ -96,6 +96,10 @@ static u32 combatLastScore;
 #define gAiState aiVmState
 #include "generated/ai_vm_routines.h"
 #include "generated/ai_danger_routines.h"
+extern int GetUnitItemCount(struct Unit *u);
+static s8 AiAttemptStealActionWithinMovement(void);
+static void MarkMovementMapEdges(void){for(int y=0;y<gBmMapSize.y;y++)for(int x=0;x<gBmMapSize.x;x++){if(vmMove[y][x]>=120)continue;if(x&&vmMove[y][x-1]==255)vmMove[y][x-1]=120;if(x+1<gBmMapSize.x&&vmMove[y][x+1]==255)vmMove[y][x+1]=120;if(y&&vmMove[y-1][x]==255)vmMove[y-1][x]=120;if(y+1<gBmMapSize.y&&vmMove[y+1][x]==255)vmMove[y+1][x]=120;}}
+#define AI_ACTION_STEAL 3
 #include "generated/ai_combat_routines.h"
 #include "generated/ai_heal_assets.h"
 #include "generated/ai_heal_routines.h"
@@ -103,10 +107,20 @@ static u32 combatLastScore;
 #define AI_ACTION_PILLAGE 4
 #define AI_FLAG_0 1
 #define AI_UNIT_FLAG_3 8
-static void SetWorkingMoveCosts(const s8 *costs){(void)costs;} // Native tactical probe selects class/weather costs.
-static void GenerateMovementMap(int x,int y,int limit,int id){if(fe8_tactical_probe_movement(aiScriptUnit,x,y,limit,id,(u8*)gWorkingBmMap[0])<0)vmError=6;}
-static s8 AiTryDoSpecialItems(void){if(aiScriptUnit->pClassData->number==CLASS_ROGUE){vmError=7;return 0;}for(int i=0;i<5;i++){int item=GetItemIndex(aiScriptUnit->items[i]);if(item==ITEM_DOORKEY||item==ITEM_LOCKPICK||item==ITEM_ANTITOXIN){vmError=7;return 0;}}return 0;} // Known chapter-2 inventories have none; refuse unported special-item branches.
+static s8 gWorkingTerrainMoveCosts[65];
+static void SetWorkingMoveCosts(const s8 *costs){memcpy(gWorkingTerrainMoveCosts,costs,65);} // Native tactical probe selects class/weather costs.
+static void GenerateMovementMap(int x,int y,int limit,int id){if(fe8_tactical_probe_costs(aiScriptUnit,x,y,limit,id,(u8*)gWorkingBmMap[0],gWorkingTerrainMoveCosts)<0)vmError=6;}
+#define AI_FLAG_3 8
+#define AI_FLAG_BERSERKED 4
+#define UNIT_ACTION_STEAL 6
+#define CHARACTER_RENNAC 0x1c
+extern int GetItemType(int item);
+static s8 sub_8040C5C(void){if(aiScriptUnit->pClassData->number==CLASS_ROGUE)vmError=7;return 0;} // Rogue-specific logic remains a guarded boundary.
+static s8 AiTryDoSpecialItems(void);
+
 #include "generated/ai_loot.h"
+#include "generated/ai_keys.h"
+#include "generated/ai_steal.h"
 #undef gBattleActor
 #undef gBattleTarget
 #undef gAiState
@@ -169,10 +183,10 @@ static int RunRuntimeScript(int kind){
  for(int n=0;n<256;n++){int id=kind?aiScriptUnit->ai2:aiScriptUnit->ai1,count=kind?sizeof(aiVmB)/sizeof(*aiVmB):sizeof(aiVmA)/sizeof(*aiVmA);if(id>=count||*pc>=(kind?aiVmBLengths[id]:aiVmALengths[id])){vmError=2;break;}struct AiScr *c=(kind?aiVmB[id]:aiVmA[id])+*pc;if(c->cmd==AI_CMD_LABEL){vmError=3;break;}if(kind)AiTryExecScriptB();else AiTryExecScriptA();if(vmError||gAiScriptEnded)break;if(n==255)vmError=4;}
  runtimeScript=0;return vmError?-vmError:0;
 }
-static void StartPhase(void){phaseIndex=phaseStep=phaseError=phaseCompleted=0;memset(&aiVmState,0,sizeof(aiVmState));for(int i=1;i<64;i++){struct Unit *u=GetUnit(i);if(UNIT_IS_VALID(u)&&!(u->state&(US_HIDDEN|US_DEAD|US_BIT16))&&UNIT_MOV(u)>aiVmState.bestBlueMov)aiVmState.bestBlueMov=UNIT_MOV(u);}}
+static void StartPhase(void){phaseIndex=phaseStep=phaseError=phaseCompleted=0;memset(&aiVmState,0,sizeof(aiVmState));aiVmState.flags=AI_FLAG_0;aiVmState.unk7E=255;aiVmState.specialItemFlags=nativeAiItemConfig[(u8)gPlaySt.chapterIndex];for(int i=1;i<64;i++){struct Unit *u=GetUnit(i);if(UNIT_IS_VALID(u)&&!(u->state&(US_HIDDEN|US_DEAD|US_BIT16))&&UNIT_MOV(u)>aiVmState.bestBlueMov)aiVmState.bestBlueMov=UNIT_MOV(u);}}
 int fe8_ai_tick(void){
  if(prepared<0||phaseError)return -1;if(fe8_event_busy()||fe8_event_info(12))return 0;
- if(phaseStep==1){if(fe8_units_busy())return 0;if(gAiDecision.actionId==AI_ACTION_COMBAT){int r=fe8_battle_attack(gAiDecision.unitId,gAiDecision.targetId,gAiDecision.itemSlot);if(r<0){phaseError=20-r;return -1;}phaseStep=2;return 0;}if(gAiDecision.actionId==AI_ACTION_USEITEM&&fe8_recovery_item(gAiDecision.unitId,gAiDecision.itemSlot)<0){phaseError=12;return -1;}if(gAiDecision.actionId==AI_ACTION_PILLAGE&&fe8_event_pillage(gAiDecision.unitId)<0){phaseError=13;return -1;}phaseStep=2;}
+ if(phaseStep==1){if(fe8_units_busy())return 0;if(gAiDecision.actionId==AI_ACTION_COMBAT){int r=fe8_battle_attack(gAiDecision.unitId,gAiDecision.targetId,gAiDecision.itemSlot);if(r<0){phaseError=20-r;return -1;}phaseStep=2;return 0;}if(gAiDecision.actionId==AI_ACTION_STEAL&&fe8_unit_steal(gAiDecision.unitId,gAiDecision.targetId,gAiDecision.itemSlot)<0){phaseError=14;return -1;}if(gAiDecision.actionId==AI_ACTION_USEITEM&&((GetItemIndex(GetUnit(gAiDecision.unitId)->items[gAiDecision.itemSlot])==ITEM_DOORKEY||GetItemIndex(GetUnit(gAiDecision.unitId)->items[gAiDecision.itemSlot])==ITEM_LOCKPICK)?fe8_tactical_npc_key(gAiDecision.unitId,gAiDecision.itemSlot):fe8_recovery_item(gAiDecision.unitId,gAiDecision.itemSlot))<0){phaseError=12;return -1;}if(gAiDecision.actionId==AI_ACTION_PILLAGE&&(fe8_map_terrain(gAiDecision.xMove,gAiDecision.yMove)==TERRAIN_CHEST_FULL?fe8_tactical_npc_key(gAiDecision.unitId,gAiDecision.itemSlot):fe8_event_pillage(gAiDecision.unitId))<0){phaseError=13;return -1;}phaseStep=2;}
  if(phaseStep==2){if(fe8_battle_busy())return 0;struct Unit *u=GetUnit(gAiDecision.unitId);u->state|=US_HAS_MOVED_AI|US_UNSELECTABLE;phaseStep=0;phaseIndex++;phaseCompleted++;fe8_event_actor((u8)u->index);fe8_event_post_action();return 0;}
  if(phaseIndex>=prepared)return 1;
  int index=gAiState.units[phaseIndex];struct Unit *real=GetUnit(index);if(!UNIT_IS_VALID(real)||real->state&(US_DEAD|US_UNSELECTABLE)){phaseIndex++;return 0;}
@@ -194,7 +208,7 @@ int fe8_ai_tick(void){
  if(vmError){phaseError=vmError;aiScriptUnit=NULL;return -1;}
  real->ai1=copy.ai1;real->ai2=copy.ai2;real->ai_a_pc=copy.ai_a_pc;real->ai_b_pc=copy.ai_b_pc;real->aiFlags=copy.aiFlags;real->ai_counter=copy.ai_counter;real->state|=US_HAS_MOVED_AI;aiScriptUnit=NULL;
  if(!gAiDecision.actionPerformed||(gAiDecision.xMove==real->xPos&&gAiDecision.yMove==real->yPos&&gAiDecision.actionId==AI_ACTION_NONE)){phaseIndex++;return 0;}
- if(gAiDecision.actionId!=AI_ACTION_NONE&&gAiDecision.actionId!=AI_ACTION_COMBAT&&gAiDecision.actionId!=AI_ACTION_USEITEM&&gAiDecision.actionId!=AI_ACTION_PILLAGE){phaseError=10;return -1;}
+ if(gAiDecision.actionId!=AI_ACTION_NONE&&gAiDecision.actionId!=AI_ACTION_COMBAT&&gAiDecision.actionId!=AI_ACTION_USEITEM&&gAiDecision.actionId!=AI_ACTION_PILLAGE&&gAiDecision.actionId!=AI_ACTION_STEAL){phaseError=10;return -1;}
  if(fe8_tactical_npc_move(index,gAiDecision.xMove,gAiDecision.yMove)<0){phaseError=11;return -1;}fe8_map_focus(gAiDecision.xMove,gAiDecision.yMove);phaseStep=1;return 0;
 }
 

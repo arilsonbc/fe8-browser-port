@@ -63,7 +63,7 @@ items=raw('gItemData');parts.append('static const struct {u8 uses;u32 attributes
 # Relocate original REDA and definition pointers into native constant data.
 defTables=[];manifest=[]
 for name,(address,size) in symbols.items():
- if not (name.startswith('UnitDef_Event_Prologue') or name in ['UnitDef_Event_Ch1Ally','UnitDef_Event_Ch1Enemy','UnitDef_Event_Ch1NPC','UnitDef_Event_Ch1AllyReinforce','UnitDef_Event_Ch1EnemyReinforce','UnitDef_088B43D0','UnitDef_Event_Ch2Ally','UnitDef_088B4344','UnitDef_088B440C','UnitDef_088B4434','UnitDef_088B4470','UnitDef_088B44AC']):continue
+ if not (name.startswith('UnitDef_Event_Prologue') or name in ['UnitDef_Event_Ch1Ally','UnitDef_Event_Ch1Enemy','UnitDef_Event_Ch1NPC','UnitDef_Event_Ch1AllyReinforce','UnitDef_Event_Ch1EnemyReinforce','UnitDef_088B43D0','UnitDef_Event_Ch2Ally','UnitDef_088B4344','UnitDef_088B440C','UnitDef_088B4434','UnitDef_088B4470','UnitDef_088B44AC','UnitDef_Event_Ch3Ally','UnitDef_088B463C','UnitDef_088B4718','UnitDef_088B476C','UnitDef_088B47E4']):continue
  data=raw(name);entries=[]
  for i in range(0,len(data),20):
   r=data[i:i+20]

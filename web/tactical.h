@@ -6,6 +6,13 @@ int fe8_tactical_probe_movement(struct Unit *unit,int x,int y,int limit,int id,u
 void fe8_tactical_reset(void);
 void fe8_tactical_render_menu(u8 *rgba);
 void fe8_tactical_render_item_menu(u8 *rgba);
+int fe8_tactical_can_chest(void);
+int fe8_tactical_chest(void);
+int fe8_tactical_can_door(void);
+int fe8_tactical_door(void);
+int fe8_tactical_npc_key(int index,int slot);
+const s8 *fe8_tactical_movement_cost(struct Unit *u);
+int fe8_tactical_probe_costs(struct Unit *u,int x,int y,int limit,int id,u8 *out,const s8 *costs);
 int fe8_tactical_can_take(void);
 int fe8_tactical_begin_take(void);
 int fe8_tactical_take(void);

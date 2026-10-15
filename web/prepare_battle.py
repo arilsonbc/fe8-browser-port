@@ -73,3 +73,5 @@ for i,f in enumerate(functions):
 (root/'web/generated/battle_routines.h').write_text('\n'.join(f[:f.index('{')].strip()+';' for f in functions)+'\n'+'\n'.join(functions))
 (root/'web/generated/battle_assets.json').write_text(json.dumps({'items':len(entries),'routines':itemFunctions+unitFunctions+battleFunctions,'boundaries':['support bonuses use relocated original support/affinity tables','magic seal and unusable locks rejected','ballista and arena rejected','normal physical combat uses original hit/EXP/result routines; map presentation adapted; AI execution and death events pending','simulation uses three original routines in SIMULATE mode, with isolated BattleUnit/Hit results and restored combat state','simulation guards reject ballista/magic/stat-bonus equipment/obstacles; light-rune trap toggling not integrated' ]},indent=2))
 print(f'Battle: {len(entries)} item records and {len(functions)} original routines for native scripted and normal combat')
+
+(root/'web/generated/battle_obstacle.h').write_text(fn('src/bmbattle.c','ComputeBattleObstacleStats'))

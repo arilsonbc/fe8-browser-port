@@ -88,3 +88,6 @@ routines.append(function('src/bmmap.c','RevertMapChange'))
 (root/'web/generated/map_routines.h').write_text('\n'.join(routines))
 print('Maps: 79 verified chapter records, '+str(len(assets))+' deduplicated assets, 12 original routines')
 
+
+base=addr('gChapterDataTable')
+with (root/'web/generated/map_assets.h').open('a') as out:out.write('\nstatic const u8 chapterWallHp[]={'+','.join(str(rom[base+i*148+44]) for i in range(79))+'};')
