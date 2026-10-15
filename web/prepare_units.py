@@ -90,6 +90,13 @@ ui=lz(symbols['gGfx_MiscUiGraphics'][0]);parts.append('static const u8 rescueIco
 functions=[fn('src/bmunit.c',n) for n in ['ClearUnit','CopyUnit','GetFreeUnit','InitUnits','UnitAddItem','UnitClearInventory','UnitInitFromDefinition','UnitLoadStatsFromChracter','UnitCheckStatCaps','GetUnitFromCharId','SetUnitHp','UnitLoadSupports']]
 functions.append(fn('src/muctrl.c','GenUnitDefinitionFinalPosition'))
 functions.append(fn('src/bmsave.c','LoadSavedUnit'))
+writer=fn('src/bmsave.c','WriteGameSavePackedUnit')
+writer=writer.replace('struct GameSavePackedUnit unitp;','struct GameSavePackedUnit unitp = {0};').replace('struct Unit tmp_unit;','struct Unit tmp_unit = {0};')
+writer=writer.replace('    unitp.pid = UNIT_CHAR_ID(unit);\n    unitp.jid = unit->pClassData->number;','    unitp.pid = 0;\n    unitp.jid = 0;')
+writer=re.sub(r'#if BUGFIX.*?#endif','    else {unitp.pid = UNIT_CHAR_ID(unit);unitp.jid = unit->pClassData->number;}',writer,flags=re.S)
+writer=writer.replace('        struct Unit tmp_unit = {0};','').replace('    if (NULL == unit->pCharacterData)', '    struct Unit tmp_unit = {0};\n    if (NULL == unit->pCharacterData)')
+functions.append(writer)
+
 functions += [fn('src/bmbattle.c',n) for n in ['GetStatIncrease','GetAutoleveledStatIncrease']]
 functions.append(fn('src/bmdifficulty.c','GetCurrentPromotedLevelBonus'))
 functions += [fn('src/bmunit.c',n) for n in ['UnitAutolevelCore','UnitAutolevel']]

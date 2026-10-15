@@ -67,3 +67,7 @@ constants=(root/'src/bmsave-lib.c').read_text();lookup=re.findall(r'static const
 (root/'web/generated/save_routines.h').write_text('\n'.join(lookup+prototypes+functions))
 print('Save: '+str(len(functions))+' original routines and binary ABI extracted')
 
+
+# Same original convoy bit-packing into an immutable native chapter-start record.
+codec=function('src/bmsave-lib.c','WriteSupplyItems').replace('void WriteSupplyItems(', 'static void PackCheckpointSupply(').replace('unsigned char buf[176];','unsigned char buf[176] = {0};').replace('WriteAndVerifySramFast(buf, sram_dest, GAMESAVE_SIZE_SUPPLY);','memcpy(sram_dest, buf, GAMESAVE_SIZE_SUPPLY);')
+(root/'web/generated/save_checkpoint_codec.h').write_text(codec)

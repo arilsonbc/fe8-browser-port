@@ -24,7 +24,7 @@ for table in ['gAi1ScriptTable','gAi2ScriptTable']:
 for name in ['gAiScript_FallbackAi1','gAiScript_FallbackAi2']:parts.append('#define '+name+' '+script(symbols[name][0]))
 (root/'web/generated/ai_vm_assets.h').write_text('\n'.join(parts));(root/'web/generated/ai_vm_assets.json').write_text(json.dumps({'scripts':manifest,'tables':tableCounts,'keys':'callback/data addresses are keys only; unsupported handlers never dereference or execute them'},indent=2))
 source=(root/'src/cp_script.c').read_text()
-names=['AiTryExecScriptA','AiTryExecScriptB','AiExecFallbackScriptA','AiExecFallbackScriptB','AiScript_Exec','AiScriptCmd_00_ConditionalGoto','AiScriptCmd_02_ChangeAi','AiScriptCmd_03_Goto','AiScriptCmd_06_DoNothing','AiScriptCmd_0E_DoNothing','AiScriptCmd_14_DoNothing','AiScriptCmd_15_DoNothing','AiScriptCmd_1B_NoOp','AiScriptCmd_0D_MoveTowardsCharacterUntilInRange','AiScriptCmd_12_MoveTowardsEnemy','AiIsUnitEnemy']
+names=['AiTryExecScriptA','AiTryExecScriptB','AiExecFallbackScriptA','AiExecFallbackScriptB','AiScript_Exec','AiScriptCmd_00_ConditionalGoto','AiScriptCmd_02_ChangeAi','AiScriptCmd_03_Goto','AiScriptCmd_06_DoNothing','AiScriptCmd_0E_DoNothing','AiScriptCmd_17_DoEscape','AiScriptCmd_14_DoNothing','AiScriptCmd_15_DoNothing','AiScriptCmd_1B_NoOp','AiScriptCmd_0D_MoveTowardsCharacterUntilInRange','AiScriptCmd_12_MoveTowardsEnemy','AiIsUnitEnemy']
 functions=[]
 for name in names:
  m=re.search(r'(?:s8|void) '+name+r'\([^\n]*\)\s*\{',source);assert m,name;p=m.end();depth=1

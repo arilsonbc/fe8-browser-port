@@ -1,4 +1,7 @@
 #include "save.h"
+#include "units.h"
+#include "events.h"
+#include "tactical.h"
 #include <string.h>
 #include "generated/save_chapter_ids.h"
 static struct SaveBlocks storage;
@@ -21,6 +24,9 @@ int fe8_convoy_add(int item){return item>0?AddItemToConvoy(item):-1;}
 static u8 permanentFlags[25];
 static const char sSaveMarker[]="AGB-FE9";
 static int initialized,revision,errors,importWarnings;
+static struct GameSaveBlock chapterStart,checkpointOrigin;
+static int checkpointCaptured,checkpointSerial,checkpointSavedSerial,checkpointError;
+static u32 checkpointOriginChecksum,playtimeFrames;
 static bool IsSramWorking(void){return true;}
 static bool InStorage(const void *p,u32 size){uintptr_t a=(uintptr_t)p,b=(uintptr_t)&storage;return a>=b&&a-b<=32768&&size<=32768-(a-b);}
 static void ReadSramFast(const void *src,void *dst,u32 size){
@@ -55,10 +61,11 @@ static int GetPermanentFlagBitsSize(void){return 25;}
 static bool IsValidSuspendSave(int slot);
 static void ReadSuspendSavePlaySt(int slot,struct PlaySt *p);
 #include "generated/save_routines.h"
+#include "generated/save_checkpoint_codec.h"
 static bool IsValidSuspendSave(int slot){return slot>=3&&slot<=4&&ReadSaveBlockInfo(NULL,slot);}
 static void ReadSuspendSavePlaySt(int slot,struct PlaySt *p){struct SuspendSaveBlock *s=GetSaveReadAddr(slot);if(s)ReadSramFast(s,p,sizeof(*p));else memset(p,0,sizeof(*p));}
 void fe8_save_ensure(void){if(!initialized){initialized=1;InitGlobalSaveInfodata();}}
-void fe8_save_reset_empty(void){initialized=1;memset(&gPlaySt,0,sizeof(gPlaySt));errors=importWarnings=0;InitGlobalSaveInfodata();}
+void fe8_save_reset_empty(void){fe8_save_checkpoint_reset();playtimeFrames=0;initialized=1;memset(&gPlaySt,0,sizeof(gPlaySt));errors=importWarnings=0;InitGlobalSaveInfodata();}
 int fe8_save_valid(int slot){fe8_save_ensure();return slot>=0&&slot<3&&IsSaveValid(slot);}
 int fe8_save_chapter(int slot){struct PlaySt p;if(!fe8_save_valid(slot))return -1;ReadGameSavePlaySt(slot,&p);return (u8)p.chapterIndex;}
 int fe8_save_difficulty(int slot){struct PlaySt p;if(!fe8_save_valid(slot))return -1;ReadGameSavePlaySt(slot,&p);return p.chapterStateBits&PLAY_FLAG_HARD?2:p.config.controller?1:0;}
@@ -77,7 +84,7 @@ int fe8_save_copy(int source,int destination){
  CopyGameSave(source,destination);return fe8_save_valid(destination)?0:-4;
 }
 int fe8_save_erase(int slot){if(!fe8_save_valid(slot))return -1;InvalidateGameSave(slot);return fe8_save_valid(slot)?-2:0;}
-int fe8_save_load(int slot){if(!fe8_save_valid(slot))return -1;ReadGameSavePlaySt(slot,&gPlaySt);struct GameSaveBlock *block=GetSaveReadAddr(slot);ReadSupplyItems(block->supplyItems);gPlaySt.gameSaveSlot=slot;WriteLastGameSaveId(slot);return 0;}
+int fe8_save_load(int slot){if(!fe8_save_valid(slot))return -1;ReadGameSavePlaySt(slot,&gPlaySt);struct GameSaveBlock *block=GetSaveReadAddr(slot);ReadSupplyItems(block->supplyItems);memcpy(permanentFlags,block->permanentFlags,25);playtimeFrames=gPlaySt.time_saved>215999940u?215999940u:gPlaySt.time_saved;gPlaySt.gameSaveSlot=slot;WriteLastGameSaveId(slot);return 0;}
 u8 *fe8_save_buffer(void){fe8_save_ensure();return (u8 *)&storage;}
 u8 *fe8_save_import_buffer(void){return staging;}
 int fe8_save_global_valid(void){fe8_save_ensure();return ReadGlobalSaveInfo(NULL);}
@@ -105,7 +112,7 @@ int fe8_save_import(int length){
   accepted[used++]=c;
   if(slot>=3)warning++;
  }
- memcpy(&storage,staging,32768);revision++;importWarnings=warning;return 0;
+ memcpy(&storage,staging,32768);fe8_save_checkpoint_reset();revision++;importWarnings=warning;return 0;
 }
 
 int fe8_save_title(int slot){
@@ -124,3 +131,26 @@ int fe8_save_suspend_slot(void){
 }
 
 int fe8_save_read_units(int slot,struct GameSavePackedUnit *out){if(!fe8_save_valid(slot))return -1;struct GameSaveBlock *block=GetSaveReadAddr(slot);ReadSramFast(block->units,out,51*sizeof(*out));return 0;}
+
+const u8 *fe8_save_loaded_flags(void){return permanentFlags;}
+void fe8_save_checkpoint_reset(void){checkpointCaptured=checkpointSavedSerial=checkpointError=0;}
+void fe8_save_playtime_tick(void){if(playtimeFrames<215999940u)playtimeFrames++;}
+int fe8_save_checkpoint_capture(void){
+ checkpointCaptured=0;int slot=gPlaySt.gameSaveSlot,chapter=(u8)gPlaySt.chapterIndex;
+ if(chapter>3||slot<0||slot>2||!fe8_save_valid(slot))return -1;
+ struct SaveBlockInfo info;if(!ReadSaveBlockInfo(&info,slot))return -2;
+ struct GameSaveBlock *source=GetSaveReadAddr(slot);if(source->playSt.playthroughIdentifier!=gPlaySt.playthroughIdentifier)return -3;
+ memcpy(&checkpointOrigin,source,sizeof(checkpointOrigin));memcpy(&chapterStart,source,sizeof(chapterStart));chapterStart.playSt=gPlaySt;chapterStart.playSt.chapterTurnNumber=0;chapterStart.playSt.faction=64;chapterStart.playSt.time_saved=playtimeFrames;
+ if(fe8_units_pack_blue(chapterStart.units)<0)return -4;
+ PackCheckpointSupply(chapterStart.supplyItems);fe8_event_pack_permanent(chapterStart.permanentFlags);checkpointOriginChecksum=info.checksum32;checkpointSerial++;checkpointSavedSerial=0;checkpointCaptured=1;checkpointError=0;return 0;
+}
+static int CheckpointAvailable(void){int boundary=checkpointCaptured&&chapterStart.playSt.chapterIndex==3&&fe8_event_info(1)==42&&fe8_event_info(9)==4;return checkpointCaptured&&(!fe8_event_busy()||boundary)&&!fe8_event_info(12)&&!fe8_units_busy()&&fe8_tactical_info(0)==0&&gPlaySt.faction==0&&gPlaySt.gameSaveSlot==chapterStart.playSt.gameSaveSlot&&(gPlaySt.chapterIndex==chapterStart.playSt.chapterIndex||boundary)&&gPlaySt.playthroughIdentifier==chapterStart.playSt.playthroughIdentifier;}
+int fe8_save_checkpoint_info(int field){return field==0?CheckpointAvailable():field==1?(checkpointCaptured?(u8)chapterStart.playSt.chapterIndex:-1):field==2?(checkpointCaptured?chapterStart.playSt.gameSaveSlot:-1):field==3?(checkpointCaptured&&checkpointSavedSerial==checkpointSerial):field==4?checkpointSerial:field==5?checkpointError:-1;}
+int fe8_save_checkpoint_commit(void){
+ checkpointError=0;if(!CheckpointAvailable())return checkpointError=-1;int slot=chapterStart.playSt.gameSaveSlot;struct SaveBlockInfo current;if(!ReadSaveBlockInfo(&current,slot)||(current.checksum32!=checkpointOriginChecksum||memcmp(GetSaveReadAddr(slot),&checkpointOrigin,sizeof(checkpointOrigin))))return checkpointError=-2;
+ if(checkpointSavedSerial==checkpointSerial)return 0;
+ struct SaveBlocks backup=storage;int oldRevision=revision,oldErrors=errors;chapterStart.playSt.time_saved=playtimeFrames;
+ struct GameSaveBlock *dest=GetSaveWriteAddr(slot);WriteAndVerifySramFast(&chapterStart,dest,sizeof(chapterStart));struct SaveBlockInfo chunk={.magic32=SAVEMAGIC32,.kind=SAVEBLOCK_KIND_GAME};WriteSaveBlockInfo(&chunk,slot);WriteLastGameSaveId(slot);
+ if(errors!=oldErrors||!ReadSaveBlockInfo(&current,slot)){storage=backup;revision=oldRevision;return checkpointError=-3;}
+ memcpy(&checkpointOrigin,&chapterStart,sizeof(checkpointOrigin));checkpointOriginChecksum=current.checksum32;checkpointSavedSerial=checkpointSerial;return 0;
+} // Explicit native chapter-start save: original packed formats/checksums; unrelated slots/suspensions and unported metadata stay opaque.

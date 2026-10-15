@@ -12,6 +12,8 @@ int fe8_event_seize(int index);
 int fe8_event_unlock(int index,int x,int y);
 int fe8_event_pillage(int index);
 void fe8_event_show_icons(void);
+void fe8_event_pack_permanent(u8 *out);
+void fe8_event_load_permanent(const u8 *data);
 void fe8_event_reward(int unit,int item,int gold);
 int fe8_event_item_info(int field);
 int fe8_event_item_choose(int slot);

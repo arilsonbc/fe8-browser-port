@@ -10,7 +10,7 @@ const tables=['gAi1ScriptTable','gAi2ScriptTable'].map(n=>Array.from({length:man
   const table=tables[kind][kind?b:a];if(!table||pc>=table.length){error=2;break;}let cmd=table[pc];if(cmd.cmd===28){error=3;break;}steps++;opcode=cmd.cmd;
   if(cmd.cmd===2){if(cmd.a!==255)a=cmd.a;if(cmd.b!==255)b=cmd.b;if((kind===0&&cmd.a!==255)||(kind===1&&cmd.b!==255))pc=0;else pc++;break;}
   if(cmd.cmd===3){pc=cmd.target?table.findIndex(c=>c.cmd===28&&c.target===cmd.target)+1:0;}
-  else if([6,14,20,21].includes(cmd.cmd)){pc++;break;}
+  else if([6,14,20,21,23].includes(cmd.cmd)){pc++;break;}
   else if(cmd.cmd===27)pc++;
   else{error=100+cmd.cmd;break;}
   if(i===255)error=4;

@@ -24,6 +24,7 @@ static int GetUnitMaxHp(struct Unit *u){return u->maxHP;} // Current prologue in
 static int MakeNewItem(int item){int i=item&255;return i<sizeof(itemData)/sizeof(*itemData)?i|((itemData[i].attributes&8?0:itemData[i].uses)<<8):0;}
 static void CharStoreAI(struct Unit *u,const struct UnitDefinition *d){u->ai1=d->ai[0];u->ai2=d->ai[1];u->ai_config=d->ai[2]|d->ai[3]<<8;}
 static void AdjustNewUnitPosition(struct Unit *u,struct Vec2 *pos,u16 flags){(void)u;(void)pos;(void)flags;} // Supported definitions reject random/nearest placement before this boundary.
+static int WriteAndVerifySramFast(const void *src,void *dst,int size){memcpy(dst,src,size);return memcmp(src,dst,size)!=0;} // Packed-unit codec writes to validated native checkpoint records, not live SRAM.
 static void ReadSramFast(const void *src,void *dst,int size){memcpy(dst,src,size);} // Caller supplies validated native save records, never a ROM address.
 #define UNIT_IS_GORGON_EGG(u) ((u)->pClassData->number==CLASS_GORGONEGG||(u)->pClassData->number==CLASS_GORGONEGG2)
 #include "generated/unit_routines.h"
@@ -134,3 +135,5 @@ void fe8_unit_sync_position(int index){if(index<1||index>255||!UNIT_IS_VALID(uni
 
 extern void UnitRemoveInvalidItems(struct Unit *u);
 int fe8_unit_steal(int actor,int target,int slot){if(actor<1||actor>255||target<1||target>255||actor==target||slot<0||slot>4)return -1;struct Unit *a=GetUnit(actor),*b=GetUnit(target);if(!UNIT_IS_VALID(a)||!UNIT_IS_VALID(b)||a->state&(US_DEAD|US_RESCUED)||b->state&(US_DEAD|US_RESCUED)||abs(a->xPos-b->xPos)+abs(a->yPos-b->yPos)!=1||!b->items[slot])return -2;if(!UnitAddItem(a,b->items[slot]))return -3;b->items[slot]=0;UnitRemoveInvalidItems(b);return 0;} // Original AiStartStealAction inventory effects; animated popup deferred.
+
+int fe8_units_pack_blue(struct GameSavePackedUnit *out){if(!out)return -1;for(int i=52;i<64;i++)if(UNIT_IS_VALID(GetUnit(i)))return -2;for(int i=0;i<51;i++){struct Unit *u=GetUnit(i+1);if(UNIT_IS_VALID(u)&&!u->pClassData)return -3;WriteGameSavePackedUnit(u,out+i);}return 0;}

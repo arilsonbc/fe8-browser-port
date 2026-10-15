@@ -22,6 +22,8 @@ extern int GetItemMinRange(int item);
 extern int GetItemMight(int item);
 extern int GetUnitPower(struct Unit *unit);
 #define AI_UNIT_FLAG_0 1
+#define AI_UNIT_FLAG_3 8
+#define AI_ACTION_ESCAPE 2
 static struct {u8 units[116];} gAiState;
 static u32 priorities[116],*sUnitPriorityArray=priorities;
 static int prepared=-1,phaseIndex,phaseStep,phaseError,phaseCompleted;
@@ -94,6 +96,7 @@ static u32 combatLastScore;
 #define gBattleTarget combatTarget
 #define gActiveUnit aiScriptUnit
 #define gAiState aiVmState
+static s8 AiTryMoveTowardsEscape(void);
 #include "generated/ai_vm_routines.h"
 #include "generated/ai_danger_routines.h"
 extern int GetUnitItemCount(struct Unit *u);
@@ -106,7 +109,7 @@ static void MarkMovementMapEdges(void){for(int y=0;y<gBmMapSize.y;y++)for(int x=
 #include "constants/items.h"
 #define AI_ACTION_PILLAGE 4
 #define AI_FLAG_0 1
-#define AI_UNIT_FLAG_3 8
+
 static s8 gWorkingTerrainMoveCosts[65];
 static void SetWorkingMoveCosts(const s8 *costs){memcpy(gWorkingTerrainMoveCosts,costs,65);} // Native tactical probe selects class/weather costs.
 static void GenerateMovementMap(int x,int y,int limit,int id){if(fe8_tactical_probe_costs(aiScriptUnit,x,y,limit,id,(u8*)gWorkingBmMap[0],gWorkingTerrainMoveCosts)<0)vmError=6;}
@@ -120,6 +123,7 @@ static s8 AiTryDoSpecialItems(void);
 
 #include "generated/ai_loot.h"
 #include "generated/ai_keys.h"
+#include "generated/ai_escape.h"
 #include "generated/ai_steal.h"
 #undef gBattleActor
 #undef gBattleTarget
@@ -194,7 +198,7 @@ int fe8_ai_tick(void){
  if(aiVmState.combatWeightTableId>=AI_COEFFICIENT_COUNT){phaseError=9;aiScriptUnit=NULL;return -1;}
  // Healing and escape must be ported before these branches can execute faithfully.
  if((copy.ai_config&7)>=sizeof(gAI3HealingThresholdTable)/sizeof(*gAI3HealingThresholdTable)){phaseError=9;aiScriptUnit=NULL;return -1;}
- if(copy.aiFlags&8){phaseError=8;aiScriptUnit=NULL;return -1;}
+
  aiVmState.dangerMapFilled=0;AiInitDangerMap();AiClearDecision();aiVmState.decideState=0;
  if(!vmError&&AiUpdateGetUnitIsHealing(&copy)){
   if(!AiTryHealSelf()){
@@ -204,6 +208,7 @@ int fe8_ai_tick(void){
    }
   }
  }
+ if(!vmError&&!gAiDecision.actionPerformed&&(copy.aiFlags&8))AiTryMoveTowardsEscape();
  if(!vmError&&!gAiDecision.actionPerformed)RunRuntimeScript(0);if(!vmError&&!gAiDecision.actionPerformed&&aiVmState.decideState!=4){aiVmState.decideState=4;RunRuntimeScript(1);}
  if(vmError){phaseError=vmError;aiScriptUnit=NULL;return -1;}
  real->ai1=copy.ai1;real->ai2=copy.ai2;real->ai_a_pc=copy.ai_a_pc;real->ai_b_pc=copy.ai_b_pc;real->aiFlags=copy.aiFlags;real->ai_counter=copy.ai_counter;real->state|=US_HAS_MOVED_AI;aiScriptUnit=NULL;

@@ -35,7 +35,7 @@ static struct Unit *eventActor;
 #define gActiveUnit eventActor
 static int requestedChapter=-1,progressAction,progressCount,progressFrom=-1,progressTo=-1,progressError,lastWin,lastBoss;
 static u16 monsterRN[3];
-void fe8_progress_reset(void){requestedChapter=progressFrom=progressTo=-1;progressAction=progressCount=progressError=lastWin=lastBoss=0;}
+void fe8_progress_reset(void){fe8_save_checkpoint_reset();requestedChapter=progressFrom=progressTo=-1;progressAction=progressCount=progressError=lastWin=lastBoss=0;}
 int fe8_progress_info(int f){return f==0?progressCount:f==1?progressFrom:f==2?progressTo:f==3?requestedChapter:f==4?progressError:f==5?lastWin:f==6?lastBoss:f==7?gPlaySt.partyGoldAmount:-1;}
 static struct {int kind,cursor,actor;} chapterJobs[4];
 static int chapterJobCount;
@@ -71,6 +71,9 @@ int fe8_event_call(u32 address,int trigger){
  memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=gPlaySt.chapterIndex;eventTriggerId=trigger;eventTriggerAddress=address;eventCallSerial++;SetFlag(trigger);if(trigger==3)SetFlag(132);running=1;return 0;
 }
 int fe8_event_flag(int id){return CheckFlag(id);}
+void fe8_event_pack_permanent(u8 *out){memset(out,0,25);for(int i=0;i<200;i++)if(CheckFlag(101+i))out[i>>3]|=1u<<(i&7);}
+void fe8_event_load_permanent(const u8 *data){for(int i=0;i<200;i++)eventFlags[101+i]=!!(data[i>>3]&(1u<<(i&7)));}
+
 static void AddChapterJob(int kind){if((gPlaySt.chapterIndex!=0&&gPlaySt.chapterIndex!=1&&gPlaySt.chapterIndex!=2&&gPlaySt.chapterIndex!=3)||preview)return;if(chapterJobCount>=4){blocked=258;return;}chapterJobs[chapterJobCount].kind=kind;chapterJobs[chapterJobCount].actor=kind==2&&eventActor?(u8)eventActor->index:0;chapterJobs[chapterJobCount++].cursor=0;}
 void fe8_event_phase(void){AddChapterJob(1);}
 extern struct Unit *GetUnit(int index);
@@ -236,12 +239,13 @@ int fe8_event_preview(void){
 }
 void fe8_chapter_start(void){
  int chapter=(u8)gPlaySt.chapterIndex;fe8_event_reset();fe8_map_start(chapter);
- int count=fe8_units_restore(gPlaySt.gameSaveSlot);
+ int count=fe8_units_restore(gPlaySt.gameSaveSlot);fe8_event_load_permanent(fe8_save_loaded_flags());fe8_save_checkpoint_capture();
  if(chapter==0&&count==0){fe8_event_start(EventScr_Prologue_BeginningScene_ADDRESS);engine.evStateBits|=EV_STATE_FADEDIN;SetDispEnable(0,0,0,0,0);}
  else if(chapter==1){fe8_event_start(EventScr_Ch1_BeginningScene_ADDRESS);}
  else if(chapter==3){fe8_event_start(EventScr_Ch3_BeginningScene_ADDRESS);}
  else if(chapter==2){fe8_event_start(EventScr_Ch2_BeginningScene_ADDRESS);}
  else if(chapter==0x38){fe8_event_start(EventScr_CastleFelia_BeginningScene_ADDRESS);}
+ fe8_event_load_permanent(fe8_save_loaded_flags());
 }
 static void ApplyRequestedChapter(void){
  if(requestedChapter<0||fe8_event_busy()||EventFadePending()||fe8_units_busy())return;
@@ -253,13 +257,14 @@ static void ApplyRequestedChapter(void){
  gPlaySt.chapterIndex=to;gPlaySt.faction=FACTION_GREEN;gPlaySt.chapterTurnNumber=0;gPlaySt.chapterTotalSupportGain=0;
  gPlaySt.chapterVisionRange=progressChapters[to].fog;gPlaySt.chapterWeatherId=progressChapters[to].weather;gPlaySt.tutorial_counter=gPlaySt.tutorial_exec_type=0;gPlaySt.unk48=gPlaySt.unk4A_1=0;
  fe8_map_start(to);for(int i=1;i<64;i++){struct Unit *u=GetUnit(i);if(UNIT_IS_VALID(u)&&!(u->state&US_BIT21))u->state&=~US_NOT_DEPLOYED;}
+ fe8_save_checkpoint_capture();
  const u16 *p=ResolveScript(to==1?EventScr_Ch1_BeginningScene_ADDRESS:to==2?EventScr_Ch2_BeginningScene_ADDRESS:to==3?EventScr_Ch3_BeginningScene_ADDRESS:EventScr_CastleFelia_BeginningScene_ADDRESS);memset(&engine,0,sizeof(engine));engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=to;running=1;progressCount++;
  if(to==0x38||to==2||to==3){engine.evStateBits|=EV_STATE_FADEDIN;gLCDControlBuffer.blendY=16;gLCDControlBuffer.blendMode=3;}
  // MNCH world-map travel/narration and save menu are not ported: adapted direct entry.
  // Original chapter-intro title/graphics are not yet ported: adapted immediate map presentation.
  SetDispEnable(1,1,1,1,1);
 }
-void fe8_chapter_tick(int keys){fe8_battle_tick();fe8_units_tick();fe8_dialogue_tick();fe8_event_tick(keys);ApplyRequestedChapter();DispatchChapterJobs();if(!fe8_event_busy()&&(fe8_map_info(0)==0||fe8_map_info(0)==1||fe8_map_info(0)==2||fe8_map_info(0)==3)&&fe8_tactical_info(0)<0)fe8_tactical_start();fe8_tactical_tick(keys);}
+void fe8_chapter_tick(int keys){fe8_save_playtime_tick();fe8_battle_tick();fe8_units_tick();fe8_dialogue_tick();fe8_event_tick(keys);ApplyRequestedChapter();DispatchChapterJobs();if(!fe8_event_busy()&&(fe8_map_info(0)==0||fe8_map_info(0)==1||fe8_map_info(0)==2||fe8_map_info(0)==3)&&fe8_tactical_info(0)<0)fe8_tactical_start();fe8_tactical_tick(keys);}
 
 void fe8_event_test_tick(int keys){Proc_Run(gProcTreeRootArray[4]);fe8_chapter_tick(keys);fe8_map_tick(0);}
 

@@ -2,7 +2,7 @@ from pathlib import Path
 import re
 root=Path(__file__).resolve().parent.parent
 def function(file,name):
- s=(root/file).read_text();m=re.search(r'(?:void|s8|u8|int) '+name+r'\([^\n]*\)\s*\{',s);assert m,name;i=m.end();depth=1
+ s=(root/file).read_text();m=re.search(r'(?:void|s8|u8|int|const struct AiEscapePt\*) '+name+r'\([^\n]*\)\s*\{',s);assert m,name;i=m.end();depth=1
  while depth:
   if s[i]=='{':depth+=1
   if s[i]=='}':depth-=1
@@ -36,3 +36,25 @@ else:raise RuntimeError('No steal list terminator')
 funcs=[function('src/cp_utility.c',n) for n in ['AiGetItemStealRank','AiGetUnitStealItemSlot']]+[function('src/cp_battle.c',n) for n in ['AiAttemptStealAction_GetMovementAt','AiAttemptStealActionWithinMovement']]
 funcs[2]=funcs[2].replace('    if (gMapMovementSigned','    if(x<0||y<0||x>=gBmMapSize.x||y>=gBmMapSize.y)return 255;\n    if (gMapMovementSigned')
 (root/'web/generated/ai_steal.h').write_text('static u16 gAiStealPriorityItemList[]={'+','.join(map(str,items))+'};\n'+'\n'.join(f[:f.index('{')].strip()+';' for f in funcs)+'\n'+'\n'.join(funcs))
+
+# Original escape lookup/handler for currently integrated chapters; no pointer is executable.
+parts=['struct AiEscapePt {u8 x,y,facing;};'];seen={}
+for table in ['gRedAiEscapePoints','gGreenAiEscapePoints']:
+ a=symbols[table]-0x8000000;rows=[]
+ for chapter in range(4):
+  pointer=int.from_bytes(rom[a+chapter*4:a+chapter*4+4],'little');offset=pointer-0x8000000
+  if pointer not in seen:
+   name='nativeEscapePts'+str(len(seen));seen[pointer]=name;entries=[]
+   for k in range(32):
+    x,y,facing=rom[offset+k*3:offset+k*3+3];entries.append('{'+','.join(map(str,[x,y,facing]))+'}')
+    if x==255:break
+   else:raise RuntimeError('Escape table unterminated')
+   parts.append('static const struct AiEscapePt '+name+'[]={'+','.join(entries)+'};')
+  # Known 0..3 tables are all None, an inventory-full flag must not pause these maps.
+  assert rom[offset]==255,(table,chapter)
+  rows.append(seen[pointer])
+ parts.append('static const struct AiEscapePt *'+table+'[]={'+','.join(rows)+'};')
+funcs=[function('src/cp_0803E2F4.c',n) for n in ['GetEscapePointStructThingMaybe','AiTryMoveTowardsEscape']]
+funcs[0]=funcs[0].replace('    u8 resultMove', '    if(chapter<0||chapter>=4){vmError=8;return NULL;}\n    u8 resultMove')
+parts += [f[:f.index('{')].strip()+';' for f in funcs]+funcs
+(root/'web/generated/ai_escape.h').write_text('\n'.join(parts))

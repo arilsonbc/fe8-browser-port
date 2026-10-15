@@ -1,6 +1,12 @@
 #ifndef FE8_SAVE_H
 #define FE8_SAVE_H
 #include "generated/save_types.h"
+void fe8_save_checkpoint_reset(void);
+int fe8_save_checkpoint_capture(void);
+int fe8_save_checkpoint_info(int field);
+int fe8_save_checkpoint_commit(void);
+void fe8_save_playtime_tick(void);
+const u8 *fe8_save_loaded_flags(void);
 void fe8_save_ensure(void);
 void fe8_save_read_playst(int slot,struct PlaySt *p);
 int fe8_save_suspend_slot(void);
