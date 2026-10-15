@@ -59,11 +59,13 @@ battleFunctions=['BattleGenerateSimulation','BattleGenerateSimulationInternal','
 functions=[fn('src/bmitem.c',name) for name in itemFunctions]+[fn('src/bmunit.c',name) for name in unitFunctions]+[fn('src/bmbattle.c',name) for name in battleFunctions]
 functions=[f.replace('gItemData + itemIndex','gItemData + (itemIndex&255)') for f in functions]
 functions += [fn('src/popup.c','NewPopup_GeneralItemGot'),fn('src/bmmind.c','BATTLE_HandleItemDrop').replace('bool BATTLE_HandleItemDrop','int BATTLE_HandleItemDrop')]
+functions += [fn('src/bmitem.c','IsItemStealable'),fn('src/bmunit.c','UnitRemoveItem'),fn('src/bmbattle.c','BattleApplyMiscActionExpGains')]
 
 for i,f in enumerate(functions):
  if f.startswith('s8 BattleCheckTriangleAttack'):
   f=f.replace('int uId = gBmMapUnit[adjacentLookup[i*2 + 1] + y][adjacentLookup[i*2 + 0] + x];','int uId = fe8_unit_at(adjacentLookup[i*2 + 0] + x,adjacentLookup[i*2 + 1] + y);if(uId<0)uId=0;')
  if f.startswith(('void BattleInitItemEffect(', 'void BattleInitItemEffectTarget(')):f=f.replace('SetBattleUnitTerrainBonusesAuto','Terrain')
+ if f.startswith('void BattleInitItemEffect('):f=f.replace('int item = actor->items[itemSlot];','int item = itemSlot < 0 ? 0 : actor->items[itemSlot];')
  if f.startswith('void BattleGenerateSimulationInternal'):
   f=f.replace('    if (gBattleStats.config & BATTLE_CONFIG_BALLISTA)\n        SetBattleUnitWeaponBallista(&gBattleActor);\n    else\n        SetBattleUnitWeapon(&gBattleActor, actorWpnSlot);','    SetBattleUnitWeapon(&gBattleActor, actorWpnSlot); // Ballista refused by native entry guard.')
   f=f.replace('    DisableAllLightRunes();','    // Light-rune traps not supported by this prologue entry.').replace('    EnableAllLightRunes();','').replace('SetBattleUnitTerrainBonusesAuto','Terrain')
@@ -75,3 +77,5 @@ for i,f in enumerate(functions):
 print(f'Battle: {len(entries)} item records and {len(functions)} original routines for native scripted and normal combat')
 
 (root/'web/generated/battle_obstacle.h').write_text(fn('src/bmbattle.c','ComputeBattleObstacleStats'))
+steal=fn('src/bmmind.c','ActionSteal').replace('BattleApplyMiscAction(proc);','BattleApplyMiscActionExpGains(); // Native presentation has no blocking map-animation Proc.').replace('    EndAllMus();','    (void)proc;').replace('    BeginMapAnimForSteal();','    // Native UI presents the transferred item and EXP; full steal animation pending.')
+(root/'web/generated/battle_steal.h').write_text(steal)

@@ -8,6 +8,7 @@ int fe8_battle_set_script(const u32 *queue,int length);
 int fe8_battle_start(int actor,int target,int item,int ballista,const u32 *queue,int length);
 int fe8_battle_can_heal(int actor,int target,int slot);
 int fe8_battle_heal(int actor,int target,int slot);
+int fe8_battle_steal(int actor,int target,int slot);
 int fe8_battle_attack(int actorIndex,int targetIndex,int slot);
 int fe8_battle_forecast(int actorIndex,int targetIndex,int slot,int field);
 void fe8_battle_tick(void);

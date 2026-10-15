@@ -17,7 +17,7 @@
 struct BattleStats gBattleStats;
 struct BattleUnit gBattleActor,gBattleTarget;
 struct BattleHit gBattleHitArray[BATTLE_HIT_MAX],*gBattleHitIterator;
-static struct {struct BattleHit *scriptedBattleHits;} gActionData;
+static struct {struct BattleHit *scriptedBattleHits;u8 subjectIndex,targetIndex,itemSlotIndex;} gActionData;
 static struct {u16 um_tmp_item;int gameStateBits;} gBmSt;
 #define ABS(v) abs(v)
 #define CHAPTER_E_21 21
@@ -43,6 +43,11 @@ static void NewPopup_ItemGot(ProcPtr parent,struct Unit *u,int item){(void)paren
 static void NewPopup_GoldGot(ProcPtr parent,struct Unit *u,int amount){(void)parent;fe8_event_reward((u8)u->index,amount,1);}
 #include "generated/battle_routines.h"
 #include "generated/battle_obstacle.h"
+#define TERRAIN_PLAINS 1
+extern u32 GetPartyGoldAmount(void);
+extern void SetPartyGoldAmount(u32 amount);
+extern int UnitAddItem(struct Unit *u,int item);
+#include "generated/battle_steal.h"
 #include "constants/characters.h"
 static struct BattleHit script[BATTLE_HIT_MAX];
 static int normalBattle,obstacleX,obstacleY;
@@ -161,6 +166,15 @@ void fe8_battle_tick(void){
 int fe8_battle_busy(void){return active;}
 extern int GetUnitItemHealAmount(struct Unit *u,int item);
 extern s8 AreUnitsAllied(int a,int b);
+int fe8_item_stealable(int item){return IsItemStealable(item);}
+int fe8_battle_steal(int actor,int target,int slot){
+ if(active||actor<1||actor>63||target<129||target>191||slot<0||slot>=5)return -1;
+ struct Unit *a=GetUnit(actor),*b=GetUnit(target);
+ if(!UNIT_IS_VALID(a)||!UNIT_IS_VALID(b)||a->curHP<=0||b->curHP<=0||fe8_map_terrain(a->xPos,a->yPos)<0||fe8_map_terrain(a->xPos,a->yPos)>=65||!(UNIT_CATTRIBUTES(a)&CA_STEAL)||(a->state&(US_DEAD|US_NOT_DEPLOYED|US_RESCUED|US_HAS_MOVED))||(b->state&(US_DEAD|US_HIDDEN|US_NOT_DEPLOYED|US_RESCUED))||a->spd<b->spd||abs(a->xPos-b->xPos)+abs(a->yPos-b->yPos)!=1||GetUnitItemCount(a)>=5||!IsItemStealable(b->items[slot]))return -2;
+ memset(&gBattleStats,0,sizeof(gBattleStats));memset(&gBattleActor,0,sizeof(gBattleActor));memset(&gBattleTarget,0,sizeof(gBattleTarget));
+ int item=b->items[slot];gActionData.subjectIndex=actor;gActionData.targetIndex=target;gActionData.itemSlotIndex=slot;ActionSteal(NULL);
+ UpdateUnitFromBattle(a,&gBattleActor);actorIndex=actor;targetIndex=target;normalBattle=4;completed=1;error=0;return item;
+}
 int fe8_battle_can_heal(int actor,int target,int slot){
  if(active||actor<1||actor>255||target<1||target>255||actor==target||slot<0||slot>4)return 0;struct Unit *a=GetUnit(actor),*b=GetUnit(target);if(!UNIT_IS_VALID(a)||!UNIT_IS_VALID(b)||a->curHP<=0||b->curHP<=0||(a->state|b->state)&(US_DEAD|US_NOT_DEPLOYED|US_RESCUED)||b->state&US_HIDDEN)return 0;
  if(!AreUnitsAllied(actor,target)||b->curHP>=GetUnitMaxHp(b)||a->xPos<0||a->yPos<0||b->xPos<0||b->yPos<0||a->xPos>=fe8_map_info(1)||a->yPos>=fe8_map_info(2)||b->xPos>=fe8_map_info(1)||b->yPos>=fe8_map_info(2))return 0;int item=a->items[slot],id=GetItemIndex(item);if(id!=ITEM_STAFF_HEAL&&id!=ITEM_STAFF_MEND&&id!=ITEM_STAFF_RECOVER)return 0;

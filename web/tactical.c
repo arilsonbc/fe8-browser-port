@@ -21,7 +21,7 @@ extern int GetUnitMaxHp(struct Unit *unit);
 struct Unit *gActiveUnit;
 static u8 gActiveUnitId;
 static struct Vec2 gActiveUnitMoveOrigin,gBmMapSize;
-static struct {u8 subjectIndex,unitActionType,moveCount,itemSlotIndex;} gActionData;
+static struct {u8 subjectIndex,unitActionType,moveCount,itemSlotIndex,targetIndex;} gActionData;
 static struct {int gameStateBits,taken_action,unk3F;} gBmSt;
 struct Trap {int xPos,yPos,type;};
 #define TRAP_BALLISTA 1
@@ -33,6 +33,7 @@ static void PidStatsAddSquaresMoved(int pid,int count){squaresMoved[pid&255]+=co
 static void PidStatsSubFavval08(int pid){(void)pid;} // Usage statistics persistence remains a separate integration.
 
 static int mode=-1,selected,menuChoice,lastError,floodError,cantoActive,eventAction=1;
+static int stealPeer,stealRow,lastStolen;
 static int FinishAction(int action);
 static void FindTargets(void);
 static struct {int index,slot,x,y;} targets[255*5+64*64*5];
@@ -59,7 +60,7 @@ extern void UnitRemoveInvalidItems(struct Unit *u);
 extern int GetUnitItemCount(struct Unit *u);
 static struct Unit *gSubjectUnit;
 static int tradeCollectCount,tradeCollectPopulate,tradePeer,tradeColumn,tradeRow,tradeChosenColumn=-1,tradeChosenRow,hasTraded;
-static void AddTarget(int x,int y,int index,int extra){(void)x;(void)y;(void)extra;if(tradeCollectCount>=255)return;if(tradeCollectPopulate)targets[tradeCollectCount]=(typeof(*targets)){index,-1,x,y};tradeCollectCount++;}
+static void AddTarget(int x,int y,int index,int extra){index=(u8)index;(void)x;(void)y;(void)extra;if(tradeCollectCount>=255)return;if(tradeCollectPopulate)targets[tradeCollectCount]=(typeof(*targets)){index,-1,x,y};tradeCollectCount++;}
 #include "generated/tactical_routines.h"
 static void CallARM_FillMovementMap(void){
  // Equivalent native loop in the original ARM core's order. No ARM instructions are executed.
@@ -85,7 +86,7 @@ static void SyncMaps(void){
  for(int y=0;y<64;y++){gBmMapHidden[y]=hiddenMap[y];gBmMapTerrain[y]=terrain[y];gBmMapUnit[y]=occupancy[y];gBmMapMovement[y]=movement[y];for(int x=0;x<64;x++){int t=fe8_map_terrain(x,y);terrain[y][x]=t<0?0:t;}}
  for(int i=1;i<256;i++){struct Unit *u=GetUnit(i);if(UNIT_IS_VALID(u)&&!(u->state&(US_HIDDEN|US_DEAD|US_NOT_DEPLOYED|US_RESCUED))&&u->xPos>=0&&u->yPos>=0&&u->xPos<gBmMapSize.x&&u->yPos<gBmMapSize.y)occupancy[u->yPos][u->xPos]=i;}
 }
-void fe8_tactical_reset(void){cantoActive=0;eventAction=1;tradePeer=tradeColumn=tradeRow=tradeChosenRow=hasTraded=0;tradeChosenColumn=-1;fe8_recovery_reset();fe8_ai_reset();targetCount=targetChoice=0;gActiveUnit=NULL;gActiveUnitId=selected=menuChoice=lastError=floodError=0;mode=-1;memset(movement,255,sizeof(movement));memset(squaresMoved,0,sizeof(squaresMoved));}
+void fe8_tactical_reset(void){stealPeer=stealRow=lastStolen=0;cantoActive=0;eventAction=1;tradePeer=tradeColumn=tradeRow=tradeChosenRow=hasTraded=0;tradeChosenColumn=-1;fe8_recovery_reset();fe8_ai_reset();targetCount=targetChoice=0;gActiveUnit=NULL;gActiveUnitId=selected=menuChoice=lastError=floodError=0;mode=-1;memset(movement,255,sizeof(movement));memset(squaresMoved,0,sizeof(squaresMoved));}
 int fe8_tactical_start(void){if(mode==0&&!fe8_event_busy())return 0;if(fe8_event_busy()||!fe8_map_active()||mode>0)return -1;SyncMaps();fe8_event_show_icons();gPlaySt.faction=FACTION_BLUE;if(!gPlaySt.chapterTurnNumber)gPlaySt.chapterTurnNumber=1;mode=0;selected=lastError=0;fe8_recovery_phase(FACTION_BLUE);fe8_audio_map_start();if(gPlaySt.chapterIndex>=1&&gPlaySt.chapterIndex<=3)fe8_event_phase();return 0;}
 int fe8_tactical_select(int index){
  if(mode!=0||gPlaySt.faction!=FACTION_BLUE||fe8_event_busy()||index<1||index>255)return -1;
@@ -100,6 +101,20 @@ int fe8_tactical_cost(int x,int y){return mode<0||x<0||y<0||x>=gBmMapSize.x||y>=
 #include "constants/characters.h"
 struct MenuItemDef;
 enum {MENU_ENABLED=1,MENU_DISABLED=2,MENU_NOTSHOWN=3,TILE_COMMAND_SEIZE=0x11,TILE_COMMAND_VISIT=0x10};
+extern int IsItemStealable(int item);
+static void MakeTargetListForSteal(struct Unit *u);
+static int GetSelectTargetCount(void){return tradeCollectCount;}
+#include "generated/tactical_steal.h"
+static void MakeTargetListForSteal(struct Unit *u){
+ // Original adjacent enumeration: bounded native occupancy replaces the map callback.
+ static const s8 delta[4][2]={{0,1},{1,0},{-1,0},{0,-1}};
+ tradeCollectCount=0;for(int k=0;k<4;k++){int i=fe8_unit_at(u->xPos+delta[k][0],u->yPos+delta[k][1]);if(i>0)AddAsTarget_IfCanStealFrom(GetUnit(i));}
+}
+int fe8_tactical_can_steal(void){if(mode!=3||!gActiveUnit||fe8_event_busy())return 0;tradeCollectPopulate=0;int availability=StealCommandUsability(NULL,0);return availability==MENU_NOTSHOWN?0:availability;}
+int fe8_tactical_begin_steal(void){if(fe8_tactical_can_steal()!=MENU_ENABLED){fe8_audio_se(0x6b);return -1;}tradeCollectPopulate=1;MakeTargetListForSteal(gActiveUnit);targetCount=tradeCollectCount;targetChoice=0;mode=19;fe8_map_focus(targets[0].x,targets[0].y);return 0;}
+int fe8_tactical_steal_target(void){if(mode!=19||targetChoice>=targetCount)return -1;stealPeer=targets[targetChoice].index;gActionData.targetIndex=stealPeer;stealRow=0;mode=20;return 0;}
+int fe8_tactical_steal_info(int f){return f==0?stealPeer:f==1?stealRow:f==2?lastStolen:f==3?(mode==20?StealItemMenuCommand_Usability(NULL,stealRow):MENU_NOTSHOWN):-1;}
+int fe8_tactical_steal_item(int slot){if(mode!=20||slot<0||slot>4||StealItemMenuCommand_Usability(NULL,slot)!=MENU_ENABLED){fe8_audio_se(0x6b);return -1;}int result=fe8_battle_steal(selected,stealPeer,slot);if(result<0)return result;lastStolen=result;fe8_audio_se(0x5a);return FinishAction(6);}
 static int GetAvailableTileEventCommand(s8 x,s8 y){return fe8_event_tile_command(x,y);}
 #include "generated/progress_seize.h"
 static int IsUnitMagicSealed(struct Unit *u){return u->statusIndex==3;} // Current roster has no magic-seal aura; silence checked here.
@@ -177,13 +192,14 @@ static void FindTargets(void){
  for(int y=0;y<gBmMapSize.y;y++)for(int x=0;x<gBmMapSize.x;x++)if(fe8_map_obstacle_hp(x,y)>0)for(int slot=0;slot<5;slot++)if(fe8_battle_obstacle_forecast(selected,x,y,slot,4)>=0)targets[targetCount++]=(typeof(*targets)){0,slot,x,y};
 }
 int fe8_tactical_begin_attack(void){if(mode!=3)return -1;FindTargets();if(!targetCount)return -2;mode=5;menuChoice=0;fe8_map_focus(targets[0].x,targets[0].y);return 0;}
-int fe8_tactical_next_target(void){if((mode!=5&&mode!=9&&mode!=10&&mode!=11&&mode!=12&&mode!=14&&mode!=15&&mode!=17&&mode!=18)||!targetCount)return -1;targetChoice=(targetChoice+1)%targetCount;if(mode==15||mode==5)fe8_map_focus(targets[targetChoice].x,targets[targetChoice].y);else{struct Unit *u=GetUnit(targets[targetChoice].index);fe8_map_focus(u->xPos,u->yPos);}return 0;}
+int fe8_tactical_next_target(void){if((mode!=5&&mode!=9&&mode!=10&&mode!=11&&mode!=12&&mode!=14&&mode!=15&&mode!=17&&mode!=18&&mode!=19)||!targetCount)return -1;targetChoice=(targetChoice+1)%targetCount;if(mode==15||mode==5)fe8_map_focus(targets[targetChoice].x,targets[targetChoice].y);else{struct Unit *u=GetUnit(targets[targetChoice].index);fe8_map_focus(u->xPos,u->yPos);}return 0;}
 int fe8_tactical_attack(void){if(mode!=5||targetChoice>=targetCount)return -1;int result=targets[targetChoice].index?fe8_battle_attack(selected,targets[targetChoice].index,targets[targetChoice].slot):fe8_battle_obstacle_attack(selected,targets[targetChoice].x,targets[targetChoice].y,targets[targetChoice].slot);if(result<0){lastError=10-result;return result;}mode=6;return result;}
 int fe8_tactical_forecast(int field){if(mode!=5||targetChoice>=targetCount)return -1;return targets[targetChoice].index?fe8_battle_forecast(selected,targets[targetChoice].index,targets[targetChoice].slot,field):fe8_battle_obstacle_forecast(selected,targets[targetChoice].x,targets[targetChoice].y,targets[targetChoice].slot,field);}
 int fe8_tactical_cancel(void){
  if(mode==16){cantoActive=0;return FinishAction(UNIT_ACTION_WAIT);}
+ if(mode==20){mode=19;return 0;}
  if(mode==13){if(tradeChosenColumn>=0){tradeChosenColumn=-1;return 0;}mode=3;menuChoice=0;FindTargets();return 0;}
- if(mode==5||mode==9||mode==10||mode==11||mode==12||mode==14||mode==15||mode==17||mode==18){mode=3;menuChoice=0;FindTargets();fe8_map_focus(gActiveUnit->xPos,gActiveUnit->yPos);return 0;}
+ if(mode==5||mode==9||mode==10||mode==11||mode==12||mode==14||mode==15||mode==17||mode==18||mode==19){mode=3;menuChoice=0;FindTargets();fe8_map_focus(gActiveUnit->xPos,gActiveUnit->yPos);return 0;}
 
  if(mode==3&&gBmSt.taken_action)return FinishAction(0x1f);
  if(mode==3){fe8_unit_move_index((u8)gActiveUnit->index,gActiveUnitMoveOrigin.x,gActiveUnitMoveOrigin.y);while(fe8_units_busy())fe8_units_tick();mode=1;fe8_map_focus(gActiveUnitMoveOrigin.x,gActiveUnitMoveOrigin.y);return 0;}
@@ -198,18 +214,19 @@ void fe8_tactical_tick(int keys){
  if(mode==8){mode=3;FinishAction(eventAction);return;}
  if(mode==2){if(!fe8_units_busy()){if(cantoActive)FinishAction(UNIT_ACTION_WAIT);else{mode=3;FindTargets();}}return;}
  if(mode==6){if(!fe8_battle_busy()){mode=3;FinishAction(fe8_battle_info(18)==2?UNIT_ACTION_STAFF:UNIT_ACTION_COMBAT);}return;}
+ if(mode==20){if(keys&2){fe8_tactical_cancel();return;}if(keys&1){fe8_tactical_steal_item(stealRow);return;}int rows=GetUnitItemCount(GetUnit(stealPeer));if(rows&&(keys&192))stealRow=(stealRow+((keys&128)?1:rows-1))%rows;return;}
  if(mode==13){if(keys&2){fe8_tactical_cancel();return;}if(keys&1){fe8_tactical_trade_choose(tradeColumn,tradeRow);return;}if(keys&48){if(tradeChosenColumn<0){tradeColumn^=1;int count=GetUnitItemCount(tradeColumn?GetUnit(tradePeer):gActiveUnit);if(tradeRow>=count)tradeRow=count?count-1:0;}}if(keys&192){struct Unit *u=tradeColumn?GetUnit(tradePeer):gActiveUnit;int count=GetUnitItemCount(u),rows=tradeChosenColumn<0?count:count<5?count+1:5;if(rows>0)tradeRow=(tradeRow+((keys&128)?1:rows-1))%rows;}return;}
- if(mode==5||mode==9||mode==10||mode==11||mode==12||mode==14||mode==15||mode==17||mode==18){if(keys&2){fe8_tactical_cancel();return;}if(keys&1){if(mode==9)fe8_tactical_talk();else if(mode==10)fe8_tactical_use_item();else if(mode==11)fe8_tactical_heal();else if(mode==12)fe8_tactical_trade_target();else if(mode==14)fe8_tactical_rescue();else if(mode==15)fe8_tactical_drop();else if(mode==17)fe8_tactical_take();else if(mode==18)fe8_tactical_give();else fe8_tactical_attack();return;}if(keys&240){targetChoice=(targetChoice+((keys&80)?1:targetCount-1))%targetCount;if(mode==15||mode==5)fe8_map_focus(targets[targetChoice].x,targets[targetChoice].y);else{struct Unit *u=GetUnit(targets[targetChoice].index);fe8_map_focus(u->xPos,u->yPos);}}return;}
+ if(mode==5||mode==9||mode==10||mode==11||mode==12||mode==14||mode==15||mode==17||mode==18||mode==19){if(keys&2){fe8_tactical_cancel();return;}if(keys&1){if(mode==9)fe8_tactical_talk();else if(mode==10)fe8_tactical_use_item();else if(mode==11)fe8_tactical_heal();else if(mode==12)fe8_tactical_trade_target();else if(mode==14)fe8_tactical_rescue();else if(mode==15)fe8_tactical_drop();else if(mode==17)fe8_tactical_take();else if(mode==18)fe8_tactical_give();else if(mode==19)fe8_tactical_steal_target();else fe8_tactical_attack();return;}if(keys&240){targetChoice=(targetChoice+((keys&80)?1:targetCount-1))%targetCount;if(mode==15||mode==5)fe8_map_focus(targets[targetChoice].x,targets[targetChoice].y);else{struct Unit *u=GetUnit(targets[targetChoice].index);fe8_map_focus(u->xPos,u->yPos);}}return;}
  if(mode==7){if(fe8_event_info(12))return;fe8_audio_map_start();if(gPlaySt.faction==FACTION_BLUE){mode=0;return;}if(fe8_ai_info(0)<0){fe8_ai_prepare();return;}if(fe8_ai_tick()==1){ClearActiveFactionGrayedStates();SwitchPhases();fe8_recovery_phase(gPlaySt.faction);fe8_ai_reset();fe8_event_phase();}return;}
  if(keys&2){fe8_tactical_cancel();return;}
- if(mode==3){int ids[16];const char *labels[16];int count=ActionMenu(ids,labels);if(menuChoice>=count)menuChoice=0;if(keys&1){switch(ids[menuChoice]){case 14:fe8_tactical_chest();break;case 15:fe8_tactical_door();break;case 1:fe8_tactical_begin_attack();break;case 2:fe8_tactical_begin_talk();break;case 3:fe8_tactical_visit();break;case 4:fe8_tactical_seize();break;case 7:fe8_tactical_begin_heal();break;case 8:fe8_tactical_begin_item();break;case 9:fe8_tactical_begin_trade();break;case 10:fe8_tactical_begin_rescue();break;case 11:fe8_tactical_begin_drop();break;case 12:fe8_tactical_begin_take();break;case 13:fe8_tactical_begin_give();break;case 5:fe8_tactical_wait();break;default:fe8_tactical_cancel();break;}}else if(keys&192)menuChoice=(menuChoice+((keys&128)?1:count-1))%count;return;}
+ if(mode==3){int ids[20];const char *labels[20];int count=ActionMenu(ids,labels);if(menuChoice>=count)menuChoice=0;if(keys&1){switch(ids[menuChoice]){case 16:fe8_tactical_begin_steal();break;case 14:fe8_tactical_chest();break;case 15:fe8_tactical_door();break;case 1:fe8_tactical_begin_attack();break;case 2:fe8_tactical_begin_talk();break;case 3:fe8_tactical_visit();break;case 4:fe8_tactical_seize();break;case 7:fe8_tactical_begin_heal();break;case 8:fe8_tactical_begin_item();break;case 9:fe8_tactical_begin_trade();break;case 10:fe8_tactical_begin_rescue();break;case 11:fe8_tactical_begin_drop();break;case 12:fe8_tactical_begin_take();break;case 13:fe8_tactical_begin_give();break;case 5:fe8_tactical_wait();break;default:fe8_tactical_cancel();break;}}else if(keys&192)menuChoice=(menuChoice+((keys&128)?1:count-1))%count;return;}
  if(mode==4){if(keys&1){if(menuChoice)fe8_tactical_cancel();else fe8_tactical_end_turn();}else if(keys&192)menuChoice^=1;return;}
  if(keys&1){int x=fe8_map_info(3),y=fe8_map_info(4);if(mode==1||mode==16)fe8_tactical_move(x,y);else{int index=fe8_unit_at(x,y);if(index>0&&GetPlayerSelectKind(GetUnit(index))==PLAYER_SELECT_CONTROL)fe8_tactical_select(index);else{mode=4;menuChoice=0;}}}
 }
-int fe8_tactical_consumes_back(void){return mode>=1&&mode<=18;}
-int fe8_tactical_locks_cursor(void){return mode==2||mode==3||mode==4||mode==5||mode==6||mode==7||mode==8||mode==9||mode==10||mode==11||mode==12||mode==13||mode==14||mode==15||mode==17||mode==18;}
-int fe8_tactical_show_active(int index){return selected==index&&mode>=1&&mode<=18;}
-int fe8_tactical_info(int field){switch(field){case 0:return mode;case 1:return selected;case 2:return gPlaySt.faction;case 3:return gPlaySt.chapterTurnNumber;case 4:return menuChoice;case 5:return lastError;case 6:return GetPhaseAbleUnitCount(gPlaySt.faction);case 7:return gActionData.moveCount;case 8:return targetCount;case 9:return mode==5||mode==9||mode==10||mode==11||mode==12||mode==14||mode==17||mode==18?targets[targetChoice].index:0;case 16:return cantoActive;case 14:return mode==15||mode==5?targets[targetChoice].x:-1;case 15:return mode==15||mode==5?targets[targetChoice].y:-1;case 10:return mode==5||mode==10||mode==11||mode==12||mode==14||mode==17||mode==18?targets[targetChoice].slot:-1;default:return -1;}}
+int fe8_tactical_consumes_back(void){return mode>=1&&mode<=20;}
+int fe8_tactical_locks_cursor(void){return mode==2||mode==3||mode==4||mode==5||mode==6||mode==7||mode==8||mode==9||mode==10||mode==11||mode==12||mode==13||mode==14||mode==15||mode==17||mode==18||mode==19||mode==20;}
+int fe8_tactical_show_active(int index){return selected==index&&mode>=1&&mode<=20;}
+int fe8_tactical_info(int field){switch(field){case 0:return mode;case 1:return selected;case 2:return gPlaySt.faction;case 3:return gPlaySt.chapterTurnNumber;case 4:return menuChoice;case 5:return lastError;case 6:return GetPhaseAbleUnitCount(gPlaySt.faction);case 7:return gActionData.moveCount;case 8:return targetCount;case 9:return mode==5||mode==9||mode==10||mode==11||mode==12||mode==14||mode==17||mode==18||mode==19?targets[targetChoice].index:0;case 16:return cantoActive;case 14:return mode==15||mode==5?targets[targetChoice].x:-1;case 15:return mode==15||mode==5?targets[targetChoice].y:-1;case 10:return mode==5||mode==10||mode==11||mode==12||mode==14||mode==17||mode==18||mode==19?targets[targetChoice].slot:-1;default:return -1;}}
 void fe8_tactical_render_range(u8 *rgba,int cameraX,int cameraY,int frame){
  if(mode!=1&&mode!=16)return;int phase=frame/2&31;
  for(int y=0;y<160;y++)for(int x=0;x<240;x++){
@@ -224,12 +241,13 @@ static void MenuPixel(u8 *rgba,int x,int y,int color){if(x<0||y<0||x>=240||y>=16
 static void MenuText(u8 *rgba,const char *s,int x,int y,int highlight){for(;*s;s++){int code=(u8)*s;for(int dy=0;dy<16;dy++)for(int dx=0;dx<16;dx++){int ink=menuGlyphs[code].rows[dy]>>(dx*2)&3;if(ink)MenuPixel(rgba,x+dx,y+dy,menuTextPalette[ink+(highlight?9:0)]);}x+=menuGlyphs[code].width;}}
 static int ActionMenu(int *ids,const char **labels){int n=0;
  #define ADD_ACTION(id,text) do{ids[n]=id;labels[n++]=text;}while(0)
- if(fe8_tactical_can_chest())ADD_ACTION(14,tacticalChest);if(fe8_tactical_can_door())ADD_ACTION(15,tacticalDoor);if(targetCount)ADD_ACTION(1,tacticalAttack);if(fe8_tactical_can_heal())ADD_ACTION(7,tacticalStaff);if(fe8_tactical_can_item())ADD_ACTION(8,tacticalItem);if(fe8_tactical_can_trade())ADD_ACTION(9,tacticalTrade);if(fe8_tactical_can_rescue())ADD_ACTION(10,tacticalRescue);if(fe8_tactical_can_drop())ADD_ACTION(11,tacticalDrop);if(fe8_tactical_can_take())ADD_ACTION(12,tacticalTake);if(fe8_tactical_can_give())ADD_ACTION(13,tacticalGive);if(fe8_tactical_can_talk())ADD_ACTION(2,tacticalTalk);if(fe8_tactical_can_visit())ADD_ACTION(3,tacticalVisit);if(fe8_tactical_can_seize())ADD_ACTION(4,tacticalSeize);ADD_ACTION(5,tacticalWait);ADD_ACTION(6,tacticalCancel);
+ if(fe8_tactical_can_steal())ADD_ACTION(16,tacticalSteal);if(fe8_tactical_can_chest())ADD_ACTION(14,tacticalChest);if(fe8_tactical_can_door())ADD_ACTION(15,tacticalDoor);if(targetCount)ADD_ACTION(1,tacticalAttack);if(fe8_tactical_can_heal())ADD_ACTION(7,tacticalStaff);if(fe8_tactical_can_item())ADD_ACTION(8,tacticalItem);if(fe8_tactical_can_trade())ADD_ACTION(9,tacticalTrade);if(fe8_tactical_can_rescue())ADD_ACTION(10,tacticalRescue);if(fe8_tactical_can_drop())ADD_ACTION(11,tacticalDrop);if(fe8_tactical_can_take())ADD_ACTION(12,tacticalTake);if(fe8_tactical_can_give())ADD_ACTION(13,tacticalGive);if(fe8_tactical_can_talk())ADD_ACTION(2,tacticalTalk);if(fe8_tactical_can_visit())ADD_ACTION(3,tacticalVisit);if(fe8_tactical_can_seize())ADD_ACTION(4,tacticalSeize);ADD_ACTION(5,tacticalWait);ADD_ACTION(6,tacticalCancel);
  #undef ADD_ACTION
  return n;
 }
 void fe8_tactical_render_menu(u8 *rgba){
- if(mode!=3&&mode!=4)return;int ids[16];const char *labels[16];int rows=mode==3?ActionMenu(ids,labels):2,visible=rows>8?8:rows,first=menuChoice>=visible?menuChoice-visible+1:0,height=visible*2+2;u16 map[1024]={0};DrawUiFrame(map,20,1,9,height,0,0);
+ if(mode==20){u16 map[1024]={0};DrawUiFrame(map,3,2,24,14,0,0);for(int y=16;y<128;y++)for(int x=24;x<216;x++){int ref=map[(y/8)*32+x/8],dx=ref&1024?7-(x&7):x&7,dy=ref&2048?7-(y&7):y&7,pos=(ref&1023)*32+dy*4+dx/2;if(pos>=sizeof(gUiFrameImage))continue;int ink=gUiFrameImage[pos]>>((dx&1)*4)&15;if(ink)MenuPixel(rgba,x,y,gUiFramePaletteA[ink]);}MenuText(rgba,tacticalSteal,40,22,0);struct Unit *peer=GetUnit(stealPeer);for(int row=0;row<5;row++){int item=peer->items[row];if(!item)break;MenuText(rgba,row==stealRow?">":IsItemStealable(item)?"":"x",30,42+row*16,row==stealRow);MenuText(rgba,tacticalItemNames[item&255],42,42+row*16,row==stealRow);char uses[8];snprintf(uses,sizeof(uses),"%d",item>>8);MenuText(rgba,uses,186,42+row*16,row==stealRow);}return;}
+ if(mode!=3&&mode!=4)return;int ids[20];const char *labels[20];int rows=mode==3?ActionMenu(ids,labels):2,visible=rows>8?8:rows,first=menuChoice>=visible?menuChoice-visible+1:0,height=visible*2+2;u16 map[1024]={0};DrawUiFrame(map,20,1,9,height,0,0);
  for(int y=8;y<8+height*8;y++)for(int x=160;x<232;x++){int ref=map[(y/8)*32+x/8],dx=ref&1024?7-(x&7):x&7,dy=ref&2048?7-(y&7):y&7,pos=(ref&1023)*32+dy*4+dx/2;if(pos>=sizeof(gUiFrameImage))continue;int index=gUiFrameImage[pos]>>((dx&1)*4)&15;if(index)MenuPixel(rgba,x,y,gUiFramePaletteA[index]);}
  if(mode==3){for(int row=0;row<visible;row++)MenuText(rgba,labels[first+row],174,16+row*16,menuChoice==first+row);}else{MenuText(rgba,tacticalEnd,174,16,!menuChoice);MenuText(rgba,tacticalCancel,174,32,menuChoice);}
 }
