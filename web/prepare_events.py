@@ -52,6 +52,15 @@ for name in ['Event00_NULL','Event01_End','Event02_EvBitAndIdMod','Event03_Check
  if name=='Event0A_Call':f=f.replace('    for (i = 7;','    const u16 *target=ResolveScript(dst);if(!target||gEventActiveQueue[7].evt1)return EVC_ERROR;\n    for (i = 7;').replace('(const u16 *)dst','target')
  functions.append(f)
 (root/'web/generated/event_routines.h').write_text('\n'.join(f[:f.index('{')].strip()+';' for f in functions)+'\n'+'\n'.join(functions))
+# Original Event32 definition construction; ROM character access is relocated
+# through the validated native table. Loading/MU presentation crosses one boundary.
+spawn=fn('Event32_SpawnSingleUnit')
+spawn=spawn.replace('    unitDef.charIndex = pid;', '''    const struct CharacterData *character=GetCharacterData(pid);
+    if(!character||!GetClassData(character->defaultClass)||x<0||y<0||x>63||y>63||(subcmd>2&&subcmd!=15))return EVC_ERROR;
+    unitDef.charIndex = pid;''')
+spawn=spawn.replace('gCharacterData[pid - 1].','character->')
+spawn=spawn.replace('    LoadUnit_800F704(&unitDef, 0, 0, subcmd == 0xf);','    if(fe8_unit_spawn_definition(&unitDef,subcmd==0xf)<0)return EVC_ERROR;')
+(root/'web/generated/event_spawn.h').write_text(spawn)
 deathMessages=set()
 a,n=symbols['gDefeatTalkList'];table=rom[a-0x8000000:a-0x8000000+n]
 for j in range(0,n,12):

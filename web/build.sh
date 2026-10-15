@@ -78,6 +78,7 @@ node web/test_convoy.cjs
 node web/test_aid.cjs
 node web/test_rescue_death.cjs
 node web/test_chapter3.cjs
+node web/test_chapter3_variants.cjs
 node web/test_keys.cjs
 node web/test_obstacles.cjs
 node web/test_ai_chapter3.cjs

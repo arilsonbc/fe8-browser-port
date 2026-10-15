@@ -6,6 +6,7 @@ void fe8_units_chapter_cleanup(void);
 int fe8_units_load_event(u32 address,int animated,int cutscene);
 int fe8_unit_steal(int actor,int target,int slot);
 int fe8_units_load(u32 address,int animated);
+int fe8_unit_spawn_definition(const struct UnitDefinition *def,int cutscene);
 int fe8_units_pack_blue(struct GameSavePackedUnit *out);
 int fe8_units_restore(int slot);
 void fe8_units_tick(void);

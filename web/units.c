@@ -40,6 +40,19 @@ void fe8_units_reset(void){InitUnits();memset(motions,0,sizeof(motions));unitErr
 struct Unit *fe8_unit_by_pid(int pid){return GetUnitFromCharId(pid);}
 void fe8_units_chapter_cleanup(void){ChapterChangeUnitCleanup();memset(motions,0,sizeof(motions));}
 int fe8_units_load_event(u32 address,int animated,int cutscene){loadCutscene=cutscene;int result=fe8_units_load(address,animated);loadCutscene=0;return result;}
+int fe8_unit_spawn_definition(const struct UnitDefinition *d,int cutscene){
+ // Event32 supplies a fixed single-unit definition. Preserve LoadUnit_800F704's
+ // existing-Blue/faction semantics; MU placement is immediate in this frontend.
+ if(!d||d->allegiance>2||d->autolevel||d->genMonster||d->sumFlag||d->redaCount||d->xPosition>63||d->yPosition>63||!GetCharacterData(d->charIndex)||!GetClassData(d->classIndex))return -1;
+ int faction=d->allegiance==2?128:d->allegiance==1?64:0;
+ struct Unit *u=GetUnitFromCharId(d->charIndex);if(u&&UNIT_FACTION(u)!=0)u=NULL;
+ if(u&&faction){int next=fe8_unit_change_faction((u8)u->index,faction);if(next<0)return -2;u=GetUnit(next);}
+ if(!u){u=GetFreeUnit(faction);if(!u)return -2;ClearUnit(u);UnitInitFromDefinition(u,d);UnitLoadStatsFromChracter(u,u->pCharacterData);UnitLoadSupports(u);if(d->itemDrop)u->state|=US_DROP_ITEM;UnitCheckStatCaps(u);SetUnitHp(u,GetUnitMaxHp(u));if(cutscene&&!faction)u->state|=US_BIT22;}
+ else if(!faction){u->state&=~US_UNSELECTABLE;if(cutscene){if(u->state&US_DEAD)u->state|=US_BIT22;}else u->state&=~US_BIT22;}
+ u->xPos=d->xPosition;u->yPos=d->yPosition;
+ memset(motions+(u8)u->index,0,sizeof(*motions));fe8_unit_sync_position((u8)u->index);
+ return (u8)u->index;
+}
 int fe8_units_load(u32 address,int animated){
  const struct UnitDefinition *defs=NULL;int count=0;
  for(int i=0;i<sizeof(unitDefinitions)/sizeof(*unitDefinitions);i++)if(unitDefinitions[i].address==address){defs=unitDefinitions[i].data;count=unitDefinitions[i].count;break;}

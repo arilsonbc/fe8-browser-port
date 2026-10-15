@@ -52,6 +52,10 @@ static bool CheckFlag(int flag){return flag>0&&flag<512&&eventFlags[flag];}
 static void SlotQueuePush(u32 value){if(gEventSlots[13]>=64){blocked=7;return;}queue[gEventSlots[13]++]=value;}
 static u32 SlotQueuePop(void){if(!gEventSlots[13]){blocked=7;return 0;}u32 value=queue[0];for(int i=1;i<gEventSlots[13];i++)queue[i-1]=queue[i];gEventSlots[13]--;return value;}
 #include "generated/event_routines.h"
+extern const struct CharacterData *GetCharacterData(int id);
+extern const struct ClassData *GetClassData(int id);
+enum {UDEF_AIIDX_AI_A=0,UDEF_AIIDX_AI_B=1,UDEF_AIIDX_AI_CONF_L=2,UDEF_AIIDX_AI_CONF_H=3};
+#include "generated/event_spawn.h"
 static u8 menuOverrides[256][2];
 enum {MENU_OVERRIDE_ISAVAILABLE=0,MENU_OVERRIDE_ONSELECT=1};
 #define ARRAY_COUNT(x) (sizeof(x)/sizeof(*(x)))
@@ -172,6 +176,7 @@ static int Command(struct EventEngineProc *p){
  case 42:{int to=a<0?(int)gEventSlots[2]:a;if(preview||!((gPlaySt.chapterIndex==0&&sub==EVSUBCMD_MNC2&&to==1)||((gPlaySt.chapterIndex==1&&to==0x38||gPlaySt.chapterIndex==0x38&&to==2||gPlaySt.chapterIndex==2&&to==3)&&sub==EVSUBCMD_MNCH)))return EVC_ERROR;return Event2A_MoveToChapter(p);}
  case 46:if(sub==1){gEventSlots[12]=eventActor?eventActor->pCharacterData->number:0;return EVC_ADVANCE_CONTINUE;}return EVC_ERROR;
  case 51:if(sub==4&&!eventActor)return EVC_ERROR;return Event33_CheckUnitVarious(p);
+ case 50:return Event32_SpawnSingleUnit(p);
  case 44:{u32 address=EVT_CMD_ARG32_LE(s);if((s32)address<0)address=gEventSlots[2];return fe8_units_load_event(address,1,sub==1||a==2)<0?EVC_ERROR:EVC_ADVANCE_YIELD;}
  case 47:{struct Unit *u=EventUnit(s[2]);if(!u)return EVC_ADVANCE_CONTINUE;int x=u->xPos,y=u->yPos;
   switch(sub&7){case 0:x=s[3]&255;y=s[3]>>8;break;case 1:{struct Unit *target=EventUnit(s[3]);if(!target)return EVC_ERROR;x=target->xPos;y=target->yPos;break;}
