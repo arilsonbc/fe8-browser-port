@@ -17,15 +17,15 @@ const {setup,assert}=require('./chapter3-test-helpers.cjs');
    m._InitRN(71+fights);assert.ok(m._fe8_battle_attack(seth,boss,-1)>0);while(m._fe8_battle_busy())tick();drain();assert.ok(m._fe8_unit_info(seth,6)>0);
   }
   select(pid(1),14,1);assert.equal(m._fe8_tactical_seize(),0);drain(true);
-  assert.equal(m._fe8_event_info(1),42,variant);assert.equal(m._fe8_event_info(9),4);
+  assert.equal(m._fe8_event_info(1),-1,variant);assert.equal(m._fe8_map_info(0),4);
   assert.equal(messages.has(0x995),variant==='green',variant);
   for(const id of [0x996,0x997,0x998,0x999])assert.ok(messages.has(id));
   const colm=pid(9);assert.ok(colm,variant);assert.equal(m._fe8_unit_info(colm,2),0);
   const shouldDie=['absent','dead','green-neimi-dead'].includes(variant);
-  assert.equal(m._fe8_unit_info(colm,6)===0,shouldDie,variant);assert.equal(!!(m._fe8_unit_info(colm,15)&4),shouldDie);
+  assert.equal(m._fe8_unit_info(colm,6),m._fe8_unit_info(colm,5),'Original chapter cleanup restores HP even on records marked dead');assert.equal(!!(m._fe8_unit_info(colm,15)&4),shouldDie);
   if(colmItems)assert.deepEqual(Array.from({length:5},(_,s)=>m._fe8_unit_info(colm,30+s)),colmItems,'Faction conversion preserves packed items');
   else {assert.deepEqual(Array.from({length:5},(_,s)=>m._fe8_unit_info(colm,30+s)),[0,0,0,0,0]);assert.ok(m._fe8_unit_info(colm,15)&8,'StrictLoadUniqueAlly marks missing Colm not deployed');}
-  if(variant.endsWith('neimi-dead'))assert.equal(m._fe8_unit_info(pid(8),6),0);
+  if(variant.endsWith('neimi-dead'))assert.ok(m._fe8_unit_info(pid(8),15)&4);
   q.checkSave();
   console.log('Ch3 variant',difficulty,variant,'Colm',colm,'dead',shouldDie);
  }

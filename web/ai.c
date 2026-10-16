@@ -179,7 +179,7 @@ static void SyncVmMaps(void){
 static void NativeLoot(u8 *pc){if(gpAiScriptCurrent->cmd==16)AiScriptCmd_10_DoLooting(pc);else AiScriptCmd_11_MoveTowardsSafety(pc);}
 static void NativeAction(u8 *pc){
  if(gpAiScriptCurrent->unk_08){vmError=6;return;}
- for(int i=0;i<5;i++)if(GetItemAttributes(aiScriptUnit->items[i])&(IA_MAGIC|IA_MAGICDAMAGE|IA_STAFF)){vmError=7;return;}
+ for(int i=0;i<5;i++)if(GetItemAttributes(aiScriptUnit->items[i])&(IA_MAGICDAMAGE|IA_STAFF)){vmError=7;return;}
  u8 chance=NextRN_N(100);if(chance<=gpAiScriptCurrent->unk_01){if(gpAiScriptCurrent->cmd==7)aiVmState.flags|=AI_FLAG_STAY;AiAttemptOffensiveAction(AiIsUnitEnemy);}else aiVmState.decideState=4;(*pc)++;
 }
 static int RunRuntimeScript(int kind){

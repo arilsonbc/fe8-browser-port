@@ -31,7 +31,7 @@ static int expGained[256];
 static void PidStatsAddExpGained(int pid,int amount){expGained[pid&255]+=amount;}
 // Triangle-attack check is now extracted from the source; adjacent map access is bounded.
 static struct {u16 playerWeapon,opponentWeapon;} gArenaState;
-static int IsUnitMagicSealed(struct Unit *u){(void)u;return 0;} // Magic weapons are refused before this boundary.
+static int IsUnitMagicSealed(struct Unit *u){return u->statusIndex==UNIT_STATUS_SILENCED;} // Magic-seal aura remains outside integrated chapters.
 static int IsItemUnsealedForUnit(struct Unit *u,int item){(void)u;(void)item;return 0;} // Unusable locks are refused.
 static int GetBallistaItemAt(int x,int y){(void)x;(void)y;return 0;} // Ballista/arena paths are refused.
 
@@ -70,13 +70,13 @@ int fe8_battle_set_script(const u32 *queue,int length){struct BattleHit temporar
 static int Supported(struct Unit *u){
  if(!u||!UNIT_IS_VALID(u)||u->curHP<=0||u->xPos<0||u->yPos<0||u->state&(US_DEAD|US_IN_BALLISTA))return 0;
 
- for(int i=0;i<5;i++)if((u->items[i]&255)>=206||(GetItemAttributes(u->items[i])&(IA_MAGIC|IA_UNUSABLE)))return 0;
+ for(int i=0;i<5;i++)if((u->items[i]&255)>=206||(GetItemAttributes(u->items[i])&IA_UNUSABLE))return 0;
  int terrain=fe8_map_terrain(u->xPos,u->yPos);return terrain>=0&&terrain<65;
 }
 static void Terrain(struct BattleUnit *bu){int t=fe8_map_terrain(bu->unit.xPos,bu->unit.yPos);bu->terrainId=t;bu->terrainAvoid=bu->unit.pClassData->pTerrainAvoidLookup[t];bu->terrainDefense=bu->unit.pClassData->pTerrainDefenseLookup[t];bu->terrainResistance=bu->unit.pClassData->pTerrainResistanceLookup[t];}
 int fe8_battle_start(int actor,int target,int item,int ballista,const u32 *queue,int length){
  if(active)return -1;normalBattle=0;struct Unit *a=fe8_unit_by_pid(actor),*b=fe8_unit_by_pid(target);
- if(!Supported(a)||!Supported(b)||a==b||ballista||item)return -2;
+ if(!Supported(a)||!Supported(b)||a==b||ballista||(item&&(a->items[0]&255)!=item))return -2;
  struct BattleHit hits[BATTLE_HIT_MAX];
  if(length){int n=Decode(queue,length,hits);if(n<0)return n;}else if(scriptReady)memcpy(hits,script,sizeof(hits));else return -4;
  memset(&gBattleActor,0,sizeof(gBattleActor));memset(&gBattleTarget,0,sizeof(gBattleTarget));memset(&gBattleStats,0,sizeof(gBattleStats));

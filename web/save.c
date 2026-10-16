@@ -140,14 +140,14 @@ void fe8_save_checkpoint_reset(void){checkpointCaptured=checkpointSavedSerial=ch
 void fe8_save_playtime_tick(void){if(playtimeFrames<215999940u)playtimeFrames++;}
 int fe8_save_checkpoint_capture(void){
  checkpointCaptured=0;int slot=gPlaySt.gameSaveSlot,chapter=(u8)gPlaySt.chapterIndex;
- if(chapter>3||slot<0||slot>2||!fe8_save_valid(slot))return -1;
+ if(chapter>4||slot<0||slot>2||!fe8_save_valid(slot))return -1;
  struct SaveBlockInfo info;if(!ReadSaveBlockInfo(&info,slot))return -2;
  struct GameSaveBlock *source=GetSaveReadAddr(slot);if(source->playSt.playthroughIdentifier!=gPlaySt.playthroughIdentifier)return -3;
  memcpy(&checkpointOrigin,source,sizeof(checkpointOrigin));memcpy(&chapterStart,source,sizeof(chapterStart));chapterStart.playSt=gPlaySt;chapterStart.playSt.chapterTurnNumber=0;chapterStart.playSt.faction=64;chapterStart.playSt.time_saved=playtimeFrames;
  if(fe8_units_pack_blue(chapterStart.units)<0)return -4;
  PackCheckpointSupply(chapterStart.supplyItems);fe8_event_pack_permanent(chapterStart.permanentFlags);checkpointOriginChecksum=info.checksum32;checkpointSerial++;checkpointSavedSerial=0;checkpointCaptured=1;checkpointError=0;return 0;
 }
-static int CheckpointAvailable(void){int boundary=checkpointCaptured&&chapterStart.playSt.chapterIndex==3&&fe8_event_info(1)==42&&fe8_event_info(9)==4;return checkpointCaptured&&(!fe8_event_busy()||boundary)&&!fe8_event_info(12)&&!fe8_units_busy()&&fe8_tactical_info(0)==0&&gPlaySt.faction==0&&gPlaySt.gameSaveSlot==chapterStart.playSt.gameSaveSlot&&(gPlaySt.chapterIndex==chapterStart.playSt.chapterIndex||boundary)&&gPlaySt.playthroughIdentifier==chapterStart.playSt.playthroughIdentifier;}
+static int CheckpointAvailable(void){int boundary=checkpointCaptured&&chapterStart.playSt.chapterIndex==4&&fe8_event_info(1)==42&&fe8_event_info(9)==6;return checkpointCaptured&&(!fe8_event_busy()||boundary)&&!fe8_event_info(12)&&!fe8_units_busy()&&fe8_tactical_info(0)==0&&gPlaySt.faction==0&&gPlaySt.gameSaveSlot==chapterStart.playSt.gameSaveSlot&&(gPlaySt.chapterIndex==chapterStart.playSt.chapterIndex||boundary)&&gPlaySt.playthroughIdentifier==chapterStart.playSt.playthroughIdentifier;}
 int fe8_save_checkpoint_info(int field){return field==0?CheckpointAvailable():field==1?(checkpointCaptured?(u8)chapterStart.playSt.chapterIndex:-1):field==2?(checkpointCaptured?chapterStart.playSt.gameSaveSlot:-1):field==3?(checkpointCaptured&&checkpointSavedSerial==checkpointSerial):field==4?checkpointSerial:field==5?checkpointError:-1;}
 int fe8_save_checkpoint_commit(void){
  checkpointError=0;if(!CheckpointAvailable())return checkpointError=-1;int slot=chapterStart.playSt.gameSaveSlot;struct SaveBlockInfo current;if(!ReadSaveBlockInfo(&current,slot)||(current.checksum32!=checkpointOriginChecksum||memcmp(GetSaveReadAddr(slot),&checkpointOrigin,sizeof(checkpointOrigin))))return checkpointError=-2;

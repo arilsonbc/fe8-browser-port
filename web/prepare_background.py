@@ -19,7 +19,7 @@ def unpack(a):
    else:out.append(rom[p]);p+=1
  return bytes(out)
 parts=[];rows=[];manifest=[]
-for ident in [0,2,4,12,14,16,22,24,28,29,32,38,40,41]:
+for ident in [0,2,4,12,14,16,22,24,28,29,32,35,38,40,41]:
  pointers=[int.from_bytes(rom[base+ident*12+i:base+ident*12+i+4],'little') for i in [0,4,8]]
  gfx=unpack(pointers[0]);p=pointers[1]-0x8000000;w,h=rom[p]+1,rom[p+1]+1
  assert 30<=w<=32 and 20<=h<=32
@@ -32,4 +32,4 @@ for ident in [0,2,4,12,14,16,22,24,28,29,32,38,40,41]:
 parts.append('static const struct BackgroundAsset backgrounds[]={'+','.join(rows)+'};')
 (root/'web/generated/background_assets.h').write_text('\n'.join(parts))
 (root/'web/generated/background_assets.json').write_text(json.dumps(manifest,indent=2))
-print('Backgrounds: 14 original conversation backgrounds, bounded 4bpp/TSA/palette resources')
+print(f'Backgrounds: {len(manifest)} original conversation backgrounds, bounded 4bpp/TSA/palette resources')

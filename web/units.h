@@ -27,4 +27,5 @@ void fe8_unit_remove(int pid);
 void fe8_unit_remove_index(int index);
 int fe8_unit_move_index(int index,int x,int y);
 int fe8_unit_move_queue_index(int index,const u32 *queue,int length);
+int fe8_units_deploy_existing(u32 address);
 #endif

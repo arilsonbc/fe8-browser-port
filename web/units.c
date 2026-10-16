@@ -62,10 +62,10 @@ int fe8_units_load(u32 address,int animated){
  for(int i=0;i<count;i++){
   const struct UnitDefinition *d=defs+i;int faction=d->allegiance==2?128:d->allegiance==1?64:0;
   struct Unit *u=faction==0?GetUnitFromCharId(d->charIndex):NULL;if(!u||UNIT_FACTION(u)!=faction)u=GetFreeUnit(faction);if(!u){unitError++;return -3;}
-  int existed=UNIT_IS_VALID(u);int reuse=(gPlaySt.chapterIndex==1||gPlaySt.chapterIndex==2||gPlaySt.chapterIndex==3||gPlaySt.chapterIndex==0x38)&&faction==0&&UNIT_IS_VALID(u);
+  int existed=UNIT_IS_VALID(u);int reuse=(gPlaySt.chapterIndex==1||gPlaySt.chapterIndex==2||gPlaySt.chapterIndex==3||gPlaySt.chapterIndex==4||gPlaySt.chapterIndex==0x38)&&faction==0&&UNIT_IS_VALID(u);
   if(!reuse){ClearUnit(u);UnitInitFromDefinition(u,d);UnitLoadStatsFromChracter(u,u->pCharacterData);UnitLoadSupports(u);if(d->autolevel)UnitAutolevel(u);UnitCheckStatCaps(u);SetUnitHp(u,GetUnitMaxHp(u));}
   else {s8 x,y;GenUnitDefinitionFinalPosition(d,&x,&y,0);u->xPos=x;u->yPos=y;u->state&=~US_UNSELECTABLE;}
-  if((gPlaySt.chapterIndex>=1&&gPlaySt.chapterIndex<=3)&&faction==128){int bonus=gPlaySt.chapterStateBits&PLAY_FLAG_HARD?progressChapters[(u8)gPlaySt.chapterIndex].hard:-(gPlaySt.config.controller?progressChapters[(u8)gPlaySt.chapterIndex].normal:progressChapters[(u8)gPlaySt.chapterIndex].easy);UnitApplyBonusLevels(u,bonus);}
+  if((gPlaySt.chapterIndex>=1&&gPlaySt.chapterIndex<=4)&&faction==128){int bonus=gPlaySt.chapterStateBits&PLAY_FLAG_HARD?progressChapters[(u8)gPlaySt.chapterIndex].hard:-(gPlaySt.config.controller?progressChapters[(u8)gPlaySt.chapterIndex].normal:progressChapters[(u8)gPlaySt.chapterIndex].easy);UnitApplyBonusLevels(u,bonus);}
   if(faction==0){if(loadCutscene){if(!existed||u->state&US_DEAD)u->state|=US_BIT22;}else u->state&=~US_BIT22;}
   if(!(u->state&US_DEAD))u->state&=~(US_HIDDEN|US_NOT_DEPLOYED);
   if(d->itemDrop)u->state|=US_DROP_ITEM;
@@ -73,6 +73,14 @@ int fe8_units_load(u32 address,int animated){
   if(animated&&d->redaCount){m->px=d->xPosition*16;m->py=d->yPosition*16;m->redas=d->redas;m->count=d->redaCount;}
  }
  return count;
+}
+int fe8_units_deploy_existing(u32 address){
+ const struct UnitDefinition *defs=NULL;int count=0;
+ for(int i=0;i<sizeof(unitDefinitions)/sizeof(*unitDefinitions);i++)if(unitDefinitions[i].address==address){defs=unitDefinitions[i].data;count=unitDefinitions[i].count;break;}
+ if(!defs)return -1;
+ for(int i=1;i<64;i++){struct Unit *u=GetUnit(i);if(UNIT_IS_VALID(u))u->state|=US_NOT_DEPLOYED|US_HIDDEN;}
+ for(int d=0;d<count;d++){struct Unit *u=GetUnitFromCharId(defs[d].charIndex);if(!UNIT_IS_VALID(u)||UNIT_FACTION(u)!=0||u->curHP<=0||u->state&(US_DEAD|US_BIT22))continue;s8 x,y;GenUnitDefinitionFinalPosition(defs+d,&x,&y,0);u->xPos=x;u->yPos=y;u->state&=~(US_NOT_DEPLOYED|US_HIDDEN|US_UNSELECTABLE|US_BIT22);fe8_unit_sync_position((u8)u->index);}
+ return 0;
 }
 int fe8_unit_move_index(int index,int x,int y){if(index<1||index>255)return -1;struct Unit *u=GetUnit(index);if(!UNIT_IS_VALID(u)||x<0||y<0||x>63||y>63)return -1;struct Motion *m=&motions[(u8)u->index];m->redas=NULL;m->count=m->step=m->delay=0;m->tx=x*16;m->ty=y*16;m->manual=1;u->xPos=x;u->yPos=y;return 0;}
 int fe8_unit_move(int pid,int x,int y){struct Unit *u=GetUnitFromCharId(pid);return u?fe8_unit_move_index((u8)u->index,x,y):-1;}
