@@ -8,6 +8,8 @@ extern void SetKeyStatus_IgnoreMask(int mask);
 #include "dialogue.h"
 #include "battle.h"
 #include "death.h"
+#include "gameover.h"
+#include "generated/gameover_address.h"
 #include "tactical.h"
 #include "generated/event_types.h"
 #include "units.h"
@@ -68,7 +70,7 @@ static void AddMenuOverride(int id,int kind,int (*callback)(void)){if(id>=0&&id<
 
 #include "generated/progress_icons.h"
 void fe8_event_show_icons(void){UnsetEventId_0x84(NULL);}
-void fe8_event_reset(void){SetKeyStatus_IgnoreMask(0);pendingItem=pendingUnit=pendingChoice=itemResolved=pendingOrigin=rewardUnit=rewardValue=rewardGold=lastRewardItem=lastRewardUnit=rewardSerial=0;fe8_background_set(-1);pausedText=-1;pausedPage=0;audioWait=0;eventActor=NULL;fe8_death_reset();chapterJobCount=eventTriggerId=eventTriggerAddress=eventCallSerial=0;fe8_tactical_reset();ResetMenuOverrides();fe8_battle_reset();fe8_dialogue_reset();if(fadeAnchor){Proc_End(fadeAnchor);fadeAnchor=NULL;}memset(&gLCDControlBuffer,0,sizeof(gLCDControlBuffer));memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));memset(gEventSlots,0,sizeof(gEventSlots));memset(eventFlags,0,sizeof(eventFlags));running=preview=executed=0;blocked=textId=requests=-1;textPage=textCount=0;gKeyStatusPtr=fe8_input_status();}
+void fe8_event_reset(void){fe8_gameover_reset();SetKeyStatus_IgnoreMask(0);pendingItem=pendingUnit=pendingChoice=itemResolved=pendingOrigin=rewardUnit=rewardValue=rewardGold=lastRewardItem=lastRewardUnit=rewardSerial=0;fe8_background_set(-1);pausedText=-1;pausedPage=0;audioWait=0;eventActor=NULL;fe8_death_reset();chapterJobCount=eventTriggerId=eventTriggerAddress=eventCallSerial=0;fe8_tactical_reset();ResetMenuOverrides();fe8_battle_reset();fe8_dialogue_reset();if(fadeAnchor){Proc_End(fadeAnchor);fadeAnchor=NULL;}memset(&gLCDControlBuffer,0,sizeof(gLCDControlBuffer));memset(&engine,0,sizeof(engine));memset(gEventActiveQueue,0,sizeof(gEventActiveQueue));memset(gEventSlots,0,sizeof(gEventSlots));memset(eventFlags,0,sizeof(eventFlags));running=preview=executed=0;blocked=textId=requests=-1;textPage=textCount=0;gKeyStatusPtr=fe8_input_status();}
 int fe8_event_start(u32 address){fe8_event_reset();const u16 *p=ResolveScript(address);if(!p)return -1;engine.pEventStart=engine.pEventIdk=engine.pEventCurrent=p;engine.execType=EV_EXEC_GAMEPLAY;engine.chapterIndex=gPlaySt.chapterIndex;running=1;return 0;}
 int fe8_event_call(u32 address,int trigger){
  const u16 *p=ResolveScript(address);if(!p||running||blocked>=0||textId>=0||fe8_battle_busy())return -1;
@@ -157,7 +159,7 @@ static int Command(struct EventEngineProc *p){
  case 7:if((sub==0||sub==2)&&s[1]>=14)return EVC_ERROR;return Event07_SlotQueueOperations(p);
  case 8:return Event08_Label(p);case 9:return Event09_Goto(p);case 10:return Event0A_Call(p);
  case 12:if(s[2]>=14||s[3]>=14)return EVC_ERROR;return Event0C_Branch(p);
- case 13:if((EVT_CMD_ARG32_BE(s)&~1u)==BmGuideTextSetAllGreen_ADDRESS){BmGuideTextSetAllGreen();return EVC_ADVANCE_CONTINUE;}return EVC_ERROR;
+ case 13:if((EVT_CMD_ARG32_BE(s)&~1u)==BmGuideTextSetAllGreen_ADDRESS){BmGuideTextSetAllGreen();return EVC_ADVANCE_CONTINUE;}if(!preview&&(EVT_CMD_ARG32_BE(s)&~1u)==EventCallGameOverExt_ADDRESS)return fe8_gameover_start()<0?EVC_ERROR:EVC_ADVANCE_YIELD;return EVC_ERROR;
  case 14:return Event0E_STAL(p);
  case 16:return Event10_ModifyEvBit(p);case 17:return Event11_SetIgnoredKeys(p);
  case 18:requests=code;return Event12_StartBGM(p);case 19:requests=code;return Event13_BgmFadeIn(p);case 20:requests=code;return Event14_BgmOverideRestore(p);case 21:requests=code;return Event15_BgmVolume(p);case 22:requests=code;return Event16_(p);
@@ -269,7 +271,7 @@ static void ApplyRequestedChapter(void){
  // Original chapter-intro title/graphics are not yet ported: adapted immediate map presentation.
  SetDispEnable(1,1,1,1,1);
 }
-void fe8_chapter_tick(int keys){fe8_save_playtime_tick();fe8_battle_tick();fe8_units_tick();fe8_dialogue_tick();fe8_event_tick(keys);ApplyRequestedChapter();DispatchChapterJobs();if(!fe8_event_busy()&&(fe8_map_info(0)==0||fe8_map_info(0)==1||fe8_map_info(0)==2||fe8_map_info(0)==3)&&fe8_tactical_info(0)<0)fe8_tactical_start();fe8_tactical_tick(keys);}
+void fe8_chapter_tick(int keys){fe8_save_playtime_tick();fe8_gameover_tick(keys);if(fe8_gameover_info(0)>0)return;fe8_battle_tick();fe8_units_tick();fe8_dialogue_tick();fe8_event_tick(keys);ApplyRequestedChapter();DispatchChapterJobs();if(!fe8_event_busy()&&(fe8_map_info(0)==0||fe8_map_info(0)==1||fe8_map_info(0)==2||fe8_map_info(0)==3)&&fe8_tactical_info(0)<0)fe8_tactical_start();fe8_tactical_tick(keys);}
 
 void fe8_event_test_tick(int keys){Proc_Run(gProcTreeRootArray[4]);fe8_chapter_tick(keys);fe8_map_tick(0);}
 

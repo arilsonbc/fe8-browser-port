@@ -58,6 +58,7 @@ text='''// Generated controller decision and selected original process commands.
 #include "../map.h"
 #include "../events.h"
 #include "../tactical.h"
+#include "../gameover.h"
 extern void fe8_units_reset(void);
 #include "../save.h"
 #include "../audio.h"
@@ -121,6 +122,7 @@ void fe8_game_reset(void) {
 }
 int fe8_game_tick(int keys) {
     fe8_input_frame(keys);
+    if(fe8_gameover_info(0)==5){fe8_game_reset();return 0;}
     if(boundary==11&&!fe8_event_busy()&&!fe8_tactical_consumes_back()&&(fe8_input_new()&2)){fe8_game_reset();return 0;}
     if(boundary==11&&fe8_map_active()){Proc_Run(gProcTreeRootArray[4]);fe8_chapter_tick(fe8_input_new());fe8_map_tick(fe8_input_repeat());}
     if(boundary<0){Proc_Run(gProcTreeRootArray[3]);Proc_Run(gProcTreeRootArray[4]);}

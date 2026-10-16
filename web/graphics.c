@@ -1,4 +1,5 @@
 #include "palette.h"
+#include "gameover.h"
 static int livePalette;
 static const u8 *Pal(const u8 *original,int bank) {
     return livePalette?(const u8 *)(gPaletteBuffer+bank*16):original;
@@ -149,6 +150,7 @@ extern u8 *fe8_menu_pixels(void);
 extern int fe8_map_active(void);
 extern u8 *fe8_map_pixels(void);
 u8 *fe8_game_pixels(void) {
+    if(fe8_gameover_info(0)>0)return fe8_gameover_pixels();
     if(fe8_map_active())return fe8_map_pixels();
     if(fe8_menu_state()>=0)return fe8_menu_pixels();
     livePalette=1;fe8_screen_pixels(1);livePalette=0;

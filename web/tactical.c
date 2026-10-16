@@ -11,6 +11,7 @@
 #include "events.h"
 #include "save.h"
 #include "rng.h"
+#include "gameover.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -254,7 +255,7 @@ int fe8_tactical_cancel(void){
  if(mode==1){gActiveUnit->state&=~US_HIDDEN;mode=0;selected=0;return 0;}
  if(mode==4){mode=0;return 0;}return -1;
 }
-int fe8_tactical_end_turn(void){if(mode!=0&&mode!=4)return -1;fe8_ai_reset();ClearActiveFactionGrayedStates();SwitchPhases();fe8_recovery_phase(gPlaySt.faction);selected=0;gActiveUnit=NULL;mode=7;fe8_event_phase();return 0;}
+int fe8_tactical_end_turn(void){if(fe8_gameover_active()||mode!=0&&mode!=4)return -1;fe8_ai_reset();ClearActiveFactionGrayedStates();SwitchPhases();fe8_recovery_phase(gPlaySt.faction);selected=0;gActiveUnit=NULL;mode=7;fe8_event_phase();return 0;}
 static int FinishAction(int action){if(!gActiveUnit)return -1;gActionData.unitActionType=action;MoveActiveUnit(gActiveUnit->xPos,gActiveUnit->yPos);fe8_event_actor(selected);fe8_event_post_action();SyncMaps();if(!cantoActive&&TryMakeCantoUnit(NULL)){cantoActive=1;floodError=0;GenerateUnitMovementMapExt(gActiveUnit,UNIT_MOV(gActiveUnit)-gActionData.moveCount);if(!floodError){mode=16;fe8_map_focus(gActiveUnit->xPos,gActiveUnit->yPos);return 0;}lastError=floodError;}cantoActive=0;gActiveUnit->state|=US_HAS_MOVED;mode=0;selected=0;gActiveUnit=NULL;if(!GetPhaseAbleUnitCount(FACTION_BLUE))fe8_tactical_end_turn();return 0;}
 int fe8_tactical_wait(void){return mode==3?FinishAction(UNIT_ACTION_WAIT):-1;}
 void fe8_tactical_tick(int keys){
