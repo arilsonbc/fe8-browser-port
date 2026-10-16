@@ -7,7 +7,7 @@
   const button=(label,action)=>{const b=document.createElement('button');b.textContent=label;b.onclick=action;actions.append(b);return b;};
   const update=()=>{
    status.textContent=store.status;status.style.color=store.error?'#fbbf24':'';
-   slots.textContent=[0,1,2].map(slot=>module._fe8_save_valid(slot)?`Slot ${slot+1}: capítulo ${module._fe8_save_chapter(slot)} · ${['Easy','Normal','Difficult'][module._fe8_save_difficulty(slot)]}`:`Slot ${slot+1}: vazio`).join(' | ')+(module._fe8_save_suspend_slot()>=0?' · Há suspensão preservada; Resume ainda não integrado.':'');
+   slots.textContent=[0,1,2].map(slot=>module._fe8_save_valid(slot)?`Slot ${slot+1}: capítulo ${root.FE8ChapterNumber(module._fe8_save_chapter(slot))} · ${['Easy','Normal','Difficult'][module._fe8_save_difficulty(slot)]}`:`Slot ${slot+1}: vazio`).join(' | ')+(module._fe8_save_suspend_slot()>=0?' · Há suspensão preservada; Resume ainda não integrado.':'');
   };
   button('Exportar .sav',()=>{
    const data=store.snapshot(),url=URL.createObjectURL(new Blob([data],{type:'application/octet-stream'})),a=document.createElement('a');
@@ -19,7 +19,7 @@
    if(result<0){feedback.textContent=result===-2?'O slot foi alterado desde o início deste capítulo; a gravação foi recusada.':'A gravação do início de capítulo não está disponível neste momento.';updateCheckpoint();return;}
    const persisted=store.flush();feedback.textContent=persisted?'Início do capítulo gravado. Ao carregar o slot, a abertura recomeça com a equipe e os itens daquele início.':'Início do capítulo gravado na memória. '+store.status;update();updateCheckpoint();
   });
-  const updateCheckpoint=()=>{const chapter=module._fe8_save_checkpoint_info(1),slot=module._fe8_save_checkpoint_info(2),saved=module._fe8_save_checkpoint_info(3);checkpointButton.hidden=checkpointNote.hidden=chapter<0;checkpointButton.disabled=!module._fe8_save_checkpoint_info(0)||!!saved;checkpointButton.textContent=saved?'Início do capítulo '+chapter+' gravado':'Gravar início do capítulo '+chapter+' no slot '+(slot+1);checkpointNote.textContent='O carregamento recomeça a abertura do capítulo com a equipe e os itens capturados naquele início. O turno atual não é salvo.';};
+  const updateCheckpoint=()=>{const chapter=module._fe8_save_checkpoint_info(1),slot=module._fe8_save_checkpoint_info(2),saved=module._fe8_save_checkpoint_info(3);checkpointButton.hidden=checkpointNote.hidden=chapter<0;checkpointButton.disabled=!module._fe8_save_checkpoint_info(0)||!!saved;checkpointButton.textContent=saved?'Início do capítulo '+root.FE8ChapterNumber(chapter)+' gravado':'Gravar início do capítulo '+root.FE8ChapterNumber(chapter)+' no slot '+(slot+1);checkpointNote.textContent='O carregamento recomeça a abertura do capítulo com a equipe e os itens capturados naquele início. O turno atual não é salvo.';};
   const input=document.createElement('input');input.type='file';input.accept='.sav,.srm,application/octet-stream';input.hidden=true;input.setAttribute('aria-label','Arquivo SRAM para importar');section.append(input);
   button('Importar .sav',()=>input.click());
   input.onchange=async()=>{

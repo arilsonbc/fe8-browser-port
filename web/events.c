@@ -102,10 +102,16 @@ struct EvCheck05 {u32 unk0,script;u8 x,y;u16 cmdId;};
 #define TILE_COMMAND_CHEST 0x14
 #include "generated/progress_loca.h"
 #include "generated/progress_keyevents.h"
+#include "generated/shop_assets.h"
+#include "constants/items.h"
+extern int GetUnitItemSlot(struct Unit *u,int item);
+#define TILE_COMMAND_SECRET 0x18
+#include "generated/shop_events.h"
 static int FindTileEvent(int x,int y,struct EventInfo *info){
  if(preview||x<0||y<0||x>=fe8_map_info(1)||y>=fe8_map_info(2))return 0;const u32 *list=gPlaySt.chapterIndex==6?EventListScr_Ch5_Location:gPlaySt.chapterIndex==4?EventListScr_Ch4_Location:gPlaySt.chapterIndex==3?EventListScr_Ch3_Location:gPlaySt.chapterIndex==1?EventListScr_Ch1_Location:gPlaySt.chapterIndex==2?EventListScr_Ch2_Location:NULL;int words=gPlaySt.chapterIndex==6?ARRAY_COUNT(EventListScr_Ch5_Location):gPlaySt.chapterIndex==4?ARRAY_COUNT(EventListScr_Ch4_Location):gPlaySt.chapterIndex==3?ARRAY_COUNT(EventListScr_Ch3_Location):gPlaySt.chapterIndex==1?ARRAY_COUNT(EventListScr_Ch1_Location):ARRAY_COUNT(EventListScr_Ch2_Location);if(!list)return 0;
- for(int i=0;i+2<words&&list[i];i+=3){const u32 *r=list+i;int code=r[0]&65535;if(CheckFlag(r[0]>>16)||(code!=5&&code!=6&&code!=7&&code!=8))continue;*info=(struct EventInfo){.listScript=r,.xPos=x,.yPos=y};if((code==7?EvCheck07_CHES(info):code==8?EvCheck08_DOOR(info):EvCheck05_LOCA(info))&&info->script){if((info->commandId==0x14&&fe8_map_terrain(x,y)!=33)||(info->commandId==0x12&&fe8_map_terrain(x,y)!=30))continue;if(code==6)info->givenMoney=3;return 1;}}return 0; // Original EvCheck06_VILL lacks a C return: defined equivalent of its LOCA match + givenMoney=3.
+ for(int i=0;i+2<words&&list[i];i+=3){const u32 *r=list+i;int code=r[0]&65535;if(CheckFlag(r[0]>>16)||(code!=5&&code!=6&&code!=7&&code!=8&&code!=10))continue;*info=(struct EventInfo){.listScript=r,.xPos=x,.yPos=y};if((code==7?EvCheck07_CHES(info):code==8?EvCheck08_DOOR(info):code==10?EvCheck0A_SHOP(info):EvCheck05_LOCA(info))&&info->script){if((info->commandId==0x14&&fe8_map_terrain(x,y)!=33)||(info->commandId==0x12&&fe8_map_terrain(x,y)!=30))continue;if(code==6)info->givenMoney=3;return 1;}}return 0; // Original EvCheck06_VILL lacks a C return: defined equivalent of its LOCA match + givenMoney=3.
 }
+int fe8_event_shop_item(int x,int y,int row){struct EventInfo info;if(row<0||!FindTileEvent(x,y,&info)||(info.commandId!=0x16&&info.commandId!=0x17))return 0;for(int i=0;i<ARRAY_COUNT(shopLists);i++)if(shopLists[i].address==info.script&&row<shopLists[i].count)return fe8_unit_make_item(shopLists[i].items[row]);return 0;}
 int fe8_event_tile_command(int x,int y){struct EventInfo info;return FindTileEvent(x,y,&info)?info.commandId:0;}
 int fe8_event_unlock(int index,int x,int y){struct EventInfo info;struct Unit *u=GetUnit(index);if(!UNIT_IS_VALID(u)||fe8_event_busy()||!FindTileEvent(x,y,&info)||(info.commandId!=0x14&&info.commandId!=0x12))return -1;int change=fe8_map_change_at(x,y);if(change<0)return -2;if(info.commandId==0x14&&!info.givenItem)return -3;if(fe8_map_change(change,0)<0)return -4;SetFlag(info.flag);if(info.commandId==0x14)fe8_event_reward(index,info.givenItem==0x77?info.givenMoney:info.givenItem,info.givenItem==0x77);return 0;} // Native equivalent of known fixed-item chest / no-script door branch; random/scripted chests remain refused.
 int fe8_event_visit(int index){struct Unit *u=GetUnit(index);struct EventInfo info;if(!UNIT_IS_VALID(u)||fe8_event_busy()||!FindTileEvent(u->xPos,u->yPos,&info)||info.commandId!=0x10)return -1;int id=info.givenMoney==3?fe8_map_change_at(u->xPos,u->yPos):-1;if(info.givenMoney==3&&id<0)return -2;fe8_event_actor(index);if(fe8_event_call(info.script,info.flag)<0)return -3;if(id>=0)fe8_map_change(id,0);return 0;}
@@ -119,9 +125,9 @@ int fe8_event_talk(int actor,int target){struct EventInfo info;if(fe8_event_busy
 int fe8_event_seize(int index){struct Unit *u=GetUnit(index);if(!UNIT_IS_VALID(u)||fe8_event_tile_command(u->xPos,u->yPos)!=0x11||fe8_event_busy())return -1;fe8_event_actor(index);if(fe8_event_call(gPlaySt.chapterIndex==3?EventScr_Ch3_EndingScene_ADDRESS:EventScr_Ch1_EndingScene_ADDRESS,3)<0)return -1;SetFlag(132);return 0;}
 
 int fe8_event_pillage(int index){
- struct Unit *u=GetUnit(index);if(gPlaySt.chapterIndex!=2||!UNIT_IS_VALID(u)||UNIT_FACTION(u)!=FACTION_RED||fe8_event_busy())return -1;
- for(int i=0;i+2<ARRAY_COUNT(EventListScr_Ch2_Location)&&EventListScr_Ch2_Location[i];i+=3){const u32 *r=EventListScr_Ch2_Location+i;if((r[0]&65535)!=5||CheckFlag(r[0]>>16))continue;struct EventInfo info={.listScript=r,.xPos=u->xPos,.yPos=u->yPos-1};if(EvCheck05_LOCA(&info)&&info.commandId==0x20){int id=fe8_map_change_at(u->xPos,u->yPos-1);if(id<0||fe8_map_change(id,0)<0)return -1;fe8_event_actor(index);fe8_audio_se(0xab);return ShowText(0x12)==EVC_ERROR?-1:0;}}return -1; // Native adaptation of AiPillageAction; tile crossfade/popup animation pending.
-}
+ struct Unit *u=GetUnit(index);struct EventInfo info;if((gPlaySt.chapterIndex!=2&&gPlaySt.chapterIndex!=4&&gPlaySt.chapterIndex!=6)||!UNIT_IS_VALID(u)||UNIT_FACTION(u)!=FACTION_RED||fe8_event_busy()||!FindTileEvent(u->xPos,u->yPos-1,&info)||info.commandId!=0x20)return -1;
+ int id=fe8_map_change_at(u->xPos,u->yPos-1);if(id<0||fe8_map_change(id,0)<0)return -1;fe8_event_actor(index);fe8_audio_se(0xab);return ShowText(0x12)==EVC_ERROR?-1:0;
+} // Original AiPillageAction/StartAvailableTileEvent TILE_COMMAND_20 effects; popup/tile fade presentation adapted.
 int fe8_event_actor_portrait(void){return eventActor&&UNIT_IS_VALID(eventActor)?eventActor->pCharacterData->portraitId:0;}
 void fe8_event_actor(int index){eventActor=index>0&&index<256?GetUnit(index):NULL;}
 static struct Unit *EventUnit(int pid){

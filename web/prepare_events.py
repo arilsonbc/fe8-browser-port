@@ -126,3 +126,5 @@ parts=['#define BmGuideTextSetAllGreen_ADDRESS '+str(symbols['BmGuideTextSetAllG
 with (root/'web/generated/event_assets.h').open('a') as out:out.write('\n#define UnitDef_Event_Ch4Ally_ADDRESS '+str(symbols['UnitDef_Event_Ch4Ally'][0])+'\n')
 
 with (root/'web/generated/event_assets.h').open('a') as out:out.write('\n#define UnitDef_Event_Ch5Ally_ADDRESS '+str(symbols['UnitDef_Event_Ch5Ally'][0])+'\n')
+
+with (root/'web/event-texts.js').open('a') as out:out.write('globalThis.FE8ChapterNumber=id=>id===6?"5":id===5?"5x":String(id);\n')

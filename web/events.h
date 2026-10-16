@@ -33,4 +33,5 @@ void fe8_chapter_start(void);
 void fe8_chapter_tick(int keys);
 void fe8_event_set_flag(int flag);
 int fe8_event_quote(int message);
+int fe8_event_shop_item(int x,int y,int row);
 #endif

@@ -79,4 +79,11 @@ int fe8_tactical_locks_cursor(void);
 int fe8_tactical_show_active(int index);
 void fe8_tactical_render_range(u8 *rgba,int cameraX,int cameraY,int frame);
 int fe8_tactical_npc_move(int index,int x,int y);
+int fe8_tactical_can_shop(void);
+int fe8_tactical_begin_shop(void);
+int fe8_tactical_shop_item(int column,int row);
+int fe8_tactical_shop_price(int column,int row);
+int fe8_tactical_shop_info(int field);
+int fe8_tactical_shop_select(int column,int row);
+int fe8_tactical_shop_confirm(int yes);
 #endif
