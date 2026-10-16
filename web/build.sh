@@ -93,4 +93,5 @@ node web/test_gameover_defeat.cjs
 node web/test_chapter4.cjs
 node web/test_magic.cjs
 node web/test_chapter4_variants.cjs
+node web/test_chapter5.cjs
 echo 'WebAssembly compilado e testes aprovados. Saída: web/dist'

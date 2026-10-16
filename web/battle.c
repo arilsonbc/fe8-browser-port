@@ -98,7 +98,7 @@ static int PairAt(int ai,int bi,int slot,int x,int y){
  if(a->statusIndex==UNIT_STATUS_SLEEP||a->statusIndex==UNIT_STATUS_PETRIFY||a->statusIndex==UNIT_STATUS_13)return -4;
  for(int i=0;i<5;i++)if((GetItemAttributes(a->items[i])|GetItemAttributes(b->items[i]))&IA_MAGICDAMAGE)return -4;
  // Stat-bonus equipment requires equip-slot migration before taking the source snapshots.
- for(int i=0;i<5;i++)if(GetItemStatBonuses(a->items[i])||GetItemStatBonuses(b->items[i]))return -4;
+ for(int i=0;i<5;i++)if(((GetItemAttributes(a->items[i])&IA_WEAPON)&&GetItemStatBonuses(a->items[i]))||((GetItemAttributes(b->items[i])&IA_WEAPON)&&GetItemStatBonuses(b->items[i])))return -4;
  if(a->pClassData->classRelativePower<=0||b->pClassData->classRelativePower<=0)return -4;
  if(x<0||y<0||x>=fe8_map_info(1)||y>=fe8_map_info(2)||fe8_map_terrain(x,y)<0)return -5;
  int range=abs(x-b->xPos)+abs(y-b->yPos);

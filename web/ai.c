@@ -66,7 +66,9 @@ static const s8 *GetUnitMovementCost(struct Unit *u){return fe8_tactical_movemen
 static void GenerateUnitMovementMap(struct Unit *u){gWorkingBmMap=gBmMapRange;if(fe8_tactical_probe_movement(u,u->xPos,u->yPos,UNIT_MOV(u),(u8)u->index,(u8*)vmMove)<0)vmError=6;}
 static void sub_80410C4(int x,int y,struct Unit *u){if(fe8_tactical_probe_movement(u,x,y,120,(u8)u->index,(u8*)vmRange)<0)vmError=6;} // Original extended range with the acting unit occupancy index.
 static s8 AiCheckDangerAt(int x,int y,u8 limit){return vmDanger[y][x]<=limit;} // Only limit 255 is accepted; no danger value can exclude a tile.
-static s8 AiIsUnitEnemyAndNotInScrList(struct Unit *u){(void)u;vmError=6;return 0;} // Ignore-list pointers are not dereferenced.
+#include "generated/ai_target_lists.h"
+static const u16 *ResolveAiShortList(const void *key){for(int i=0;i<sizeof(aiShortLists)/sizeof(*aiShortLists);i++)if(aiShortLists[i].key==(u32)(uintptr_t)key)return aiShortLists[i].data;return NULL;}
+static s8 AiIsUnitEnemyAndNotInScrList(struct Unit *u);
 static void MarkWorkingMapEdges(void){for(int y=gBmMapSize.y-1;y>=0;y--)for(int x=gBmMapSize.x-1;x>=0;x--){if(vmRange[y][x]>=120)continue;if(x>0&&(s8)vmRange[y][x-1]<0)vmRange[y][x-1]=120;if(x+1<gBmMapSize.x&&(s8)vmRange[y][x+1]<0)vmRange[y][x+1]=120;if(y>0&&(s8)vmRange[y-1][x]<0)vmRange[y-1][x]=120;if(y+1<gBmMapSize.y&&(s8)vmRange[y+1][x]<0)vmRange[y+1][x]=120;}}
 static int runtimeScript,runtimeHealing;
 static void NativeAction(u8 *pc);
@@ -178,9 +180,9 @@ static void SyncVmMaps(void){
 }
 static void NativeLoot(u8 *pc){if(gpAiScriptCurrent->cmd==16)AiScriptCmd_10_DoLooting(pc);else AiScriptCmd_11_MoveTowardsSafety(pc);}
 static void NativeAction(u8 *pc){
- if(gpAiScriptCurrent->unk_08){vmError=6;return;}
+ if(gpAiScriptCurrent->unk_08&&!ResolveAiShortList(gpAiScriptCurrent->unk_08)){vmError=6;return;}
  for(int i=0;i<5;i++)if(GetItemAttributes(aiScriptUnit->items[i])&(IA_MAGICDAMAGE|IA_STAFF)){vmError=7;return;}
- u8 chance=NextRN_N(100);if(chance<=gpAiScriptCurrent->unk_01){if(gpAiScriptCurrent->cmd==7)aiVmState.flags|=AI_FLAG_STAY;AiAttemptOffensiveAction(AiIsUnitEnemy);}else aiVmState.decideState=4;(*pc)++;
+ u8 chance=NextRN_N(100);if(chance<=gpAiScriptCurrent->unk_01){if(gpAiScriptCurrent->cmd==7)aiVmState.flags|=AI_FLAG_STAY;AiAttemptOffensiveAction(gpAiScriptCurrent->cmd==5&&gpAiScriptCurrent->unk_08?AiIsUnitEnemyAndNotInScrList:AiIsUnitEnemy);}else aiVmState.decideState=4;(*pc)++;
 }
 static int RunRuntimeScript(int kind){
  gAiScriptKind=kind;u8 *pc=kind?&aiScriptUnit->ai_b_pc:&aiScriptUnit->ai_a_pc;runtimeScript=1;

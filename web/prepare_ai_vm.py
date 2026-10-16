@@ -24,7 +24,7 @@ for table in ['gAi1ScriptTable','gAi2ScriptTable']:
 for name in ['gAiScript_FallbackAi1','gAiScript_FallbackAi2']:parts.append('#define '+name+' '+script(symbols[name][0]))
 (root/'web/generated/ai_vm_assets.h').write_text('\n'.join(parts));(root/'web/generated/ai_vm_assets.json').write_text(json.dumps({'scripts':manifest,'tables':tableCounts,'keys':'callback/data addresses are keys only; unsupported handlers never dereference or execute them'},indent=2))
 source=(root/'src/cp_script.c').read_text()
-names=['AiTryExecScriptA','AiTryExecScriptB','AiExecFallbackScriptA','AiExecFallbackScriptB','AiScript_Exec','AiScriptCmd_00_ConditionalGoto','AiScriptCmd_02_ChangeAi','AiScriptCmd_03_Goto','AiScriptCmd_06_DoNothing','AiScriptCmd_0E_DoNothing','AiScriptCmd_17_DoEscape','AiScriptCmd_14_DoNothing','AiScriptCmd_15_DoNothing','AiScriptCmd_1B_NoOp','AiScriptCmd_0D_MoveTowardsCharacterUntilInRange','AiScriptCmd_12_MoveTowardsEnemy','AiIsUnitEnemy']
+names=['AiTryExecScriptA','AiTryExecScriptB','AiExecFallbackScriptA','AiExecFallbackScriptB','AiScript_Exec','AiScriptCmd_00_ConditionalGoto','AiScriptCmd_02_ChangeAi','AiScriptCmd_03_Goto','AiScriptCmd_06_DoNothing','AiScriptCmd_0E_DoNothing','AiScriptCmd_17_DoEscape','AiScriptCmd_14_DoNothing','AiScriptCmd_15_DoNothing','AiScriptCmd_1B_NoOp','AiScriptCmd_0D_MoveTowardsCharacterUntilInRange','AiScriptCmd_12_MoveTowardsEnemy','AiIsUnitEnemy','AiIsUnitEnemyAndNotInScrList']
 functions=[]
 for name in names:
  m=re.search(r'(?:s8|void) '+name+r'\([^\n]*\)\s*\{',source);assert m,name;p=m.end();depth=1
@@ -36,9 +36,10 @@ for name in names:
  if name=='AiScriptCmd_00_ConditionalGoto':f=f.replace('AiCompare(gpAiScriptCurrent->unk_08','AiVmCompareKey(gpAiScriptCurrent->unk_08')
  if name=='AiScript_Exec':f=re.sub(r'= (AiScriptCmd_\w+),',lambda m:m.group() if m.group(1) in names else '= AiNativeUnsupported,',f)
  if name=='AiScriptCmd_12_MoveTowardsEnemy':
-  f=f.replace('    struct Vec2 pos;','    struct Vec2 pos;\n    if(gpAiScriptCurrent->unk_08){vmError=6;return;}')
+  f=f.replace('    struct Vec2 pos;','    struct Vec2 pos;\n    if(gpAiScriptCurrent->unk_08&&!ResolveAiShortList(gpAiScriptCurrent->unk_08)){vmError=6;return;}')
+ if name=='AiIsUnitEnemyAndNotInScrList':f=f.replace('gpAiScriptCurrent->unk_08,','ResolveAiShortList(gpAiScriptCurrent->unk_08),')
  functions.append(f)
-for file,name in [('src/cp_utility.c','AiCompare'),('src/cp_utility.c','AiFindTargetInReachByCharId'),('src/cp_utility.c','AiFindTargetInReachByFunc'),('src/cp_utility.c','AiTryMoveTowards'),('src/cp_utility.c','AiIsWithinRectDistance'),('src/cp_decide.c','AiClearDecision'),('src/cp_decide.c','AiSetDecision'),('src/cp_decide.c','AiUpdateDecision')]:
+for file,name in [('src/cp_utility.c','AiIsInShortList'),('src/cp_utility.c','AiCompare'),('src/cp_utility.c','AiFindTargetInReachByCharId'),('src/cp_utility.c','AiFindTargetInReachByFunc'),('src/cp_utility.c','AiTryMoveTowards'),('src/cp_utility.c','AiIsWithinRectDistance'),('src/cp_decide.c','AiClearDecision'),('src/cp_decide.c','AiSetDecision'),('src/cp_decide.c','AiUpdateDecision')]:
  s=(root/file).read_text();m=re.search(r'(?:s8|void) '+name+r'\([^\n]*\)\s*\{',s);assert m,name;p=m.end();depth=1
  while depth:
   if s[p]=='{':depth+=1
@@ -57,3 +58,19 @@ common=(root/'include/cp_common.h').read_text();parts.append(re.search(r'struct 
 (root/'web/generated/ai_vm_types.h').write_text('\n'.join(parts))
 (root/'web/generated/ai_vm_routines.h').write_text('\n'.join(f[:f.index('{')].strip()+';' for f in functions)+'\n'+'\n'.join(functions))
 print(f'AI VM: {len(manifest)} verified scripts and {len(functions)} original routines; known branch/movement planning; offensive/staff/callback paths guarded')
+
+# Relocate only bounded original short lists used by known action/movement scripts.
+keys=set()
+for address in seen:
+ a,n=symbols[byAddress[address]];data=rom[a-0x8000000:a-0x8000000+n]
+ for i in range(0,n,16):
+  key=int.from_bytes(data[i+8:i+12],'little')
+  if data[i] in [5,18] and key:keys.add(key)
+parts=[];entries=[]
+for key in sorted(keys):
+ assert key in byAddress,hex(key)
+ name=byAddress[key];a,n=symbols[name];assert 0<n<=128 and n%2==0,name
+ data=rom[a-0x8000000:a-0x8000000+n];values=[int.from_bytes(data[i:i+2],'little') for i in range(0,n,2)];assert 0 in values,name
+ values=values[:values.index(0)+1];ident='aiShortList_'+str(len(entries));parts.append('static const u16 '+ident+'[]={'+','.join(map(str,values))+'};');entries.append('{'+str(key)+','+ident+'}')
+parts.append('static const struct {u32 key;const u16 *data;} aiShortLists[]={'+','.join(entries)+'};')
+(root/'web/generated/ai_target_lists.h').write_text('\n'.join(parts))

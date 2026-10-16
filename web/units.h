@@ -28,4 +28,5 @@ void fe8_unit_remove_index(int index);
 int fe8_unit_move_index(int index,int x,int y);
 int fe8_unit_move_queue_index(int index,const u32 *queue,int length);
 int fe8_units_deploy_existing(u32 address);
+int fe8_units_load_event_config(u32 address,int animated,int cutscene,int noReda);
 #endif
